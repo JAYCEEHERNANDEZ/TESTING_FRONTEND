@@ -35,15 +35,11 @@ export const consumptionAPI = axios.create({
 // Fetch all readings
 export const fetchConsumptions = () => consumptionAPI.get("/all");
 
-// Add new reading (NO MORE SENDING NAME)
+// Add new reading
 export const addConsumption = (data) =>
   consumptionAPI.post("/add", data);
 
-// Update status (paid/unpaid)
-export const updateConsumptionStatus = (id, status) =>
-  consumptionAPI.patch(`/status/${id}`, { status });
-
-// Full update (auto recalculates cubic_used)
+// Full update (auto recalculates cubic_used, payments, etc.)
 export const updateConsumption = (id, data) =>
   consumptionAPI.patch(`/update/${id}`, data);
 

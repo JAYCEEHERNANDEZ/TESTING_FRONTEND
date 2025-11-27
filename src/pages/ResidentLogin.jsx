@@ -27,22 +27,11 @@ export default function Login() {
       if (res.data?.success === true && res.data?.token) {
         setSuccess("Login successful!");
 
-        // store token correctly
+        // store token
         localStorage.setItem("token", res.data.token);
 
-        // store role if needed
-        localStorage.setItem("role", res.data.role);
-
-        // redirect based on role
-        if (res.data.role === "resident") {
-          navigate("/resident-dashboard");
-        } else if (res.data.role === "admin") {
-          navigate("/dashboard");
-        } else if (res.data.role === "meter-reader") {
-          navigate("/meter-reader-dashboard");
-        } else {
-          navigate("/"); // fallback
-        }
+        // redirect to a default dashboard (no role check)
+        navigate("/resident-dashboard");
       } else {
         setError(res.data?.message || "Login failed. Check credentials.");
       }
@@ -57,7 +46,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 relative">
       <div className="bg-white shadow-md rounded-lg p-8 w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Resident Login</h2>
+        <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
 
         {error && <p className="text-red-500 mb-4 text-center">{error}</p>}
         {success && <p className="text-green-500 mb-4 text-center">{success}</p>}
