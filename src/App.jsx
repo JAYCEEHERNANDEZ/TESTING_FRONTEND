@@ -10,6 +10,7 @@ import Profiles from "./pages/Profiles.jsx"
 import ManageCustomers  from "./pages/ManageCustomers.jsx";
 import ManageRecords from "./pages/ManageRecords.jsx";
 import ReaderDashboard from "./pages/MeterReaderDashboard.jsx"
+import Payment from "./pages/ResidentPaymentDashboard.jsx"
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/manage-customers" element={<ManageCustomers/>} />
         <Route path="/manage-records" element={<ManageRecords/>} />
         <Route path="/reader-dashboard" element={<ReaderDashboard/>} />
+        <Route path="/payment" element={<Payment/>} />
         </Routes>
     </BrowserRouter>
   );

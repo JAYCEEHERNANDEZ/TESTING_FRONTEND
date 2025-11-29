@@ -32,17 +32,63 @@ export const consumptionAPI = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-// Fetch all readings
+// Fetch all readings (Admin)
 export const fetchConsumptions = () => consumptionAPI.get("/all");
+
+// Fetch readings for a specific user
+export const fetchConsumptionsByUser = (userId) =>
+  consumptionAPI.get(`/user/${userId}`);
 
 // Add new reading
 export const addConsumption = (data) =>
   consumptionAPI.post("/add", data);
 
-// Full update (auto recalculates cubic_used, payments, etc.)
+// Update a reading (recalculate cubic_used, payments, etc.)
 export const updateConsumption = (id, data) =>
   consumptionAPI.patch(`/update/${id}`, data);
 
 // Delete a reading
 export const deleteConsumption = (id) =>
   consumptionAPI.delete(`/delete/${id}`);
+
+/* ---------------------------------------------
+   BILLING (USER + ADMIN)
+--------------------------------------------- */
+export const billingAPI = axios.create({
+  baseURL: "http://localhost:5000/billing",
+  headers: { "Content-Type": "application/json" },
+});
+
+// Fetch individual user's billing records
+export const fetchUserBilling = 
+  (userId) => billingAPI.get(`/user/${userId}`);
+
+// Fetch all billing records (Admin)
+export const fetchAllBilling = () =>
+  billingAPI.get(`/all`);
+
+/* ---------------------------------------------
+   MONTHLY INCOME
+--------------------------------------------- */
+export const monthlyIncomeAPI = axios.create({
+  baseURL: "http://localhost:5000/monthly-income",
+  headers: { "Content-Type": "application/json" },
+});
+
+// Fetch all monthly income records (Admin)
+export const fetchAllMonthlyIncome = () => monthlyIncomeAPI.get("/all");
+
+
+// PAYMENTS
+export const paymentAPI = axios.create({
+  baseURL: "http://localhost:5000/payment",
+  headers: { "Content-Type": "application/json" },
+});
+
+// Fetch payments for resident
+export const fetchUserPayments = (userId) =>
+  paymentAPI.get(`/user/${userId}`);
+
+// Make/update a payment
+export const makePayment = (paymentId, data) =>
+  paymentAPI.patch(`/pay/${paymentId}`, data);

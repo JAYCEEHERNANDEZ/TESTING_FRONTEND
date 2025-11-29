@@ -24,24 +24,17 @@ export default function Login() {
       const res = await loginadminReader({ username, password });
       console.log("Backend response:", res.data);
 
-      // Check backend success
       if (res.data?.success === true) {
-
-        // ROLE CHECK HERE
         if (res.data?.role !== "admin") {
           setError("Access denied. This page is for admin only.");
           return;
         }
 
         setSuccess("Login successful!");
-
-        // store token
         localStorage.setItem("token", res.data.message);
         localStorage.setItem("role", res.data.role);
 
-        // redirect to admin dashboard
         navigate("/admin-dashboard");
-
       } else {
         setError(res.data?.message || "Login failed. Check credentials.");
       }
@@ -52,60 +45,66 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="bg-white shadow-md rounded-lg p-8 w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Admin Login</h2>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#0a0f1f] via-[#0b0f24] to-[#1a0545] text-white px-4">
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="bg-[#1e1b2f] shadow-md rounded-3xl p-8 sm:p-12 w-full max-w-md text-center">
+        <h2 className="text-3xl sm:text-4xl font-extrabold mb-6 text-orange-200">Admin Login</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-left">
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">
+            <label className="block text-gray-300 font-semibold mb-2">
               Username
             </label>
             <input
               type="text"
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              className="w-full border border-orange-500/50 rounded-xl px-3 py-2 bg-[#0d0b1d] text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
 
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">
+            <label className="block text-gray-300 font-semibold mb-2">
               Password
             </label>
             <input
               type="password"
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              className="w-full border border-orange-500/50 rounded-xl px-3 py-2 bg-[#0d0b1d] text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
 
           {error && (
-            <p className="text-red-600 text-sm font-semibold text-center">{error}</p>
+            <p className="text-red-400 text-sm font-semibold text-center">{error}</p>
+          )}
+          {success && (
+            <p className="text-green-300 text-sm font-semibold text-center">{success}</p>
           )}
 
           <button
             type="submit"
-            className="w-full bg-blue-500 text-white font-semibold py-2 rounded hover:bg-blue-600 transition"
+            className="w-full bg-orange-500 hover:bg-orange-600 py-3 rounded-2xl font-semibold shadow-sm transition-transform hover:scale-105 text-white mt-2"
           >
             Login
           </button>
         </form>
       </div>
 
-      <div className="absolute bottom-4 text-center text-sm w-full">
+      {/* Footer / Navigation Links */}
+      <div className="mt-6 text-center text-sm sm:text-base text-gray-300">
         <nav className="space-x-3">
-          <Link to="/landing-page" className="text-blue-700 hover:underline">Home</Link>
+          <Link to="/" className="hover:underline text-orange-300">Home</Link>
           <span>|</span>
-          <Link to="/admin-login" className="text-blue-700 hover:underline">Admin</Link>
+          <Link to="/admin-login" className="hover:underline text-orange-300">Admin</Link>
           <span>|</span>
-          <Link to="/resident-login" className="text-blue-700 hover:underline">Resident</Link>
+          <Link to="/resident-login" className="hover:underline text-orange-300">Resident</Link>
           <span>|</span>
-          <Link to="/meter-reader" className="text-blue-700 hover:underline">Meter Reader</Link>
+          <Link to="/meter-reader" className="hover:underline text-orange-300">Meter Reader</Link>
         </nav>
       </div>
+
     </div>
   );
 }
