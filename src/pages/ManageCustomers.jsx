@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchUsers, registerUser, deleteUser } from "../api/api";  
+import { fetchUsers, registerUser, deleteUser } from "../api/api.js";  
 
 const ManageCustomers = () => {
 

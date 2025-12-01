@@ -90,5 +90,32 @@ export const fetchUserPayments = (userId) =>
   paymentAPI.get(`/user/${userId}`);
 
 // Make/update a payment
+/* ---------------------------------------------
+   PAYMENTS
+--------------------------------------------- */
 export const makePayment = (paymentId, data) =>
   paymentAPI.patch(`/pay/${paymentId}`, data);
+
+/* ---------------------------------------------
+   NOTIFICATIONS
+--------------------------------------------- */
+export const notificationAPI = axios.create({
+  baseURL: "http://localhost:5000/notifications", // singular, matches router
+  headers: { "Content-Type": "application/json" },
+});
+
+// Admin sends notification
+export const sendNotification = (data) =>
+  notificationAPI.post("/send", data);
+
+// Fetch notifications for a specific user
+export const fetchUserNotifications = (userId) =>
+  notificationAPI.get(`/user/${userId}`);
+
+// Fetch all notifications (admin view)
+export const fetchAllNotifications = () =>
+  notificationAPI.get("/all");
+
+// Mark notification as read
+export const markNotificationAsRead = (notifId) =>
+  notificationAPI.put(`/read/${notifId}`);

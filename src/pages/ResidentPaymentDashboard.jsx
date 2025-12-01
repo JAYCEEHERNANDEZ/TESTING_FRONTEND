@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { fetchUserPayments, makePayment } from "../api/api.js";
+import { Link, useNavigate } from "react-router-dom";
+import { fetchUserPayments, makePayment, fetchUserNotifications, markNotificationAsRead } from "../api/api.js";
+import { FaTachometerAlt, FaFileInvoiceDollar, FaMoneyBillWave, FaUserCircle } from "react-icons/fa";
 
 const ResidentPaymentDashboard = () => {
   const [payments, setPayments] = useState([]);
   const [payAmount, setPayAmount] = useState({});
+  const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false); // <-- logout modal
 
-  const userId = localStorage.getItem("user_id");
+  const userId = Number(localStorage.getItem("user_id"));
+  const navigate = useNavigate();
 
-  // -------------------------------
-  // Fetch payments for logged-in resident
-  // -------------------------------
+  /* ----------------------------- FETCH PAYMENTS ----------------------------- */
   useEffect(() => {
     if (!userId) return;
 
@@ -27,16 +30,43 @@ const ResidentPaymentDashboard = () => {
     loadPayments();
   }, [userId]);
 
-  // -------------------------------
-  // Handle input change
-  // -------------------------------
+  /* ----------------------------- FETCH NOTIFICATIONS ----------------------------- */
+  const loadNotifications = async () => {
+    if (!userId) return;
+    try {
+      const res = await fetchUserNotifications(userId);
+      if (res.data.success) {
+        setNotifications(res.data.notifications);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching notifications:", err);
+    }
+  };
+
+  /* ----------------------------- MARK READ ----------------------------- */
+  const handleMarkAsRead = async (notifId) => {
+    try {
+      await markNotificationAsRead(notifId);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, is_read: 1 } : n))
+      );
+    } catch (err) {
+      console.error("❌ Failed to mark notification as read:", err);
+    }
+  };
+
+  /* ----------------------------- PAYMENT INPUT ----------------------------- */
   const handleChange = (id, value) => {
     setPayAmount((prev) => ({ ...prev, [id]: value }));
   };
 
-  // -------------------------------
-  // Handle payment submission
-  // -------------------------------
+  /* ----------------------------- LOGOUT FUNCTION ----------------------------- */
+  const handleLogout = () => {
+    localStorage.removeItem("user_id");
+    navigate("/"); // redirect to login
+  };
+
+  /* ----------------------------- HANDLE PAYMENT ----------------------------- */
   const handlePayment = async (record) => {
     const amount = Number(payAmount[record.id] || 0);
     if (amount <= 0 || amount > record.remaining_balance) {
@@ -49,10 +79,8 @@ const ResidentPaymentDashboard = () => {
         payment_1: Number((record.payment_1 || 0) + amount),
       };
 
-      // Call backend
       const res = await makePayment(record.id, updatedPayment);
 
-      // Update frontend state
       setPayments((prev) =>
         prev.map((p) =>
           p.id === record.id
@@ -74,54 +102,128 @@ const ResidentPaymentDashboard = () => {
     }
   };
 
-  // -------------------------------
-  // Sidebar navigation items
-  // -------------------------------
+  /* ----------------------------- NAV ITEMS ----------------------------- */
   const navItems = [
-    { label: "Dashboard", path: "/resident-dashboard" },
-    { label: "Bills", path: "/bills" },
-    { label: "Payments", path: "/payments" },
+    { label: "Dashboard", path: "/resident-dashboard", icon: <FaTachometerAlt /> },
+    { label: "Bills", path: "/bills", icon: <FaFileInvoiceDollar /> },
+    { label: "Payments", path: "/payment", icon: <FaMoneyBillWave /> },
   ];
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-black text-white font-sans">
-
+    <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 backdrop-blur-xl bg-white/5 border-r border-blue-500/20 shadow-xl p-6">
-        <h2 className="text-2xl font-bold text-blue-400 drop-shadow-lg mb-10 tracking-wide">
-          Sucol Water System
-        </h2>
-        <nav className="flex flex-col gap-4 text-gray-300">
+      <aside
+        className={`bg-gray-950 text-white flex flex-col transition-all duration-300 shadow-md m-2 rounded-2xl
+        ${sidebarOpen ? "w-64" : "w-20 overflow-hidden"}`}
+      >
+        {/* Logo / Toggle */}
+        <div className="flex items-center justify-between mt-8 mb-8 px-4">
+          {sidebarOpen ? (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                <h1 className="text-2xl font-bold text-blue-600">💧</h1>
+                <h1 className="text-2xl font-bold text-blue-600">SWS</h1>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="text-2xl text-white hover:text-blue-400"
+              >
+                ☰
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-center w-full cursor-pointer" onClick={() => setSidebarOpen(true)}>
+              <h1 className="text-2xl font-bold text-blue-600">💧</h1>
+            </div>
+          )}
+        </div>
+
+        {/* NAVIGATION */}
+        <nav className="flex flex-col gap-3 mt-4">
           {navItems.map((item) => (
             <Link
               key={item.label}
               to={item.path}
-              className="hover:text-blue-400 hover:translate-x-1 transition-all"
+              className={`flex items-center gap-2 p-2 pr-0 hover:bg-blue-100 rounded 
+              ${sidebarOpen ? "justify-start px-4" : "justify-center"}`}
             >
-              {item.label}
+              <span className="text-2xl text-blue-600">{item.icon}</span>
+              {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
             </Link>
           ))}
         </nav>
+
+        {/* FOOTER + LOGOUT */}
+        <div className="mt-auto mb-4 py-2 px-2 flex flex-col items-center">
+          {sidebarOpen && (
+            <span className="text-lg font-semibold text-blue-500 uppercase mb-2">
+              SUCOL WATER SYSTEM
+            </span>
+          )}
+
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="flex items-center gap-2 text-red-500 hover:text-red-400 px-2 py-1"
+          >
+            <FaUserCircle className="text-2xl" />
+            {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
+          </button>
+        </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 p-10 relative">
-        {/* Header */}
-        <div className="flex justify-between items-center bg-blue-600/40 backdrop-blur-lg text-white text-xl font-semibold py-4 px-5 rounded-xl border border-blue-500/30 shadow-lg shadow-blue-900/40">
-          <span>Resident Payment Dashboard</span>
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="bg-blue-500 hover:bg-blue-600 p-2 rounded-full relative"
-          >
-            🔔
-          </button>
+      {/* MAIN CONTENT */}
+      <main className="flex-1 p-4 relative m-2 ml-0 rounded-2xl bg-gray-900 shadow">
+        {/* HEADER */}
+        <div className="flex justify-between items-center bg-white shadow rounded-xl py-4 px-7 mb-6">
+          <span className="text-lg font-semibold text-black">Resident Payment Dashboard</span>
+
+          {/* NOTIFICATIONS */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowNotifications(!showNotifications);
+                if (!showNotifications) loadNotifications();
+              }}
+              className="bg-blue-500 hover:bg-blue-200 p-2 rounded-full relative"
+            >
+              🔔
+              {notifications.some((n) => n.is_read === 0) && (
+                <span className="absolute top-0 right-0 bg-red-500 rounded-full w-4 h-4 text-xs text-white flex items-center justify-center">
+                  {notifications.filter((n) => n.is_read === 0).length}
+                </span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-96 bg-gray-50 border border-gray-300 rounded shadow-lg z-50 overflow-y-auto max-h-[28rem]">
+                {notifications.length === 0 ? (
+                  <p className="p-4 text-gray-600 text-center">No notifications</p>
+                ) : (
+                  notifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className={`p-3 border-b cursor-pointer hover:bg-blue-50 ${
+                        notif.is_read === 0 ? "bg-blue-50" : ""
+                      }`}
+                      onClick={() => handleMarkAsRead(notif.id)}
+                    >
+                      <p className="font-semibold text-sm text-gray-800">{notif.title}</p>
+                      <p className="text-xs text-gray-600">{notif.message}</p>
+                      <small className="text-gray-500 text-xs">
+                        {new Date(notif.created_at).toLocaleString()}
+                      </small>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* STAT CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-          {/* Total Paid */}
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg">
-            <p className="text-green-400 text-3xl font-bold drop-shadow-md">
+          <div className="bg-white p-6 rounded-xl shadow-md">
+            <p className="text-green-600 text-2xl font-bold">
               ₱{" "}
               {payments.reduce(
                 (sum, row) =>
@@ -129,43 +231,52 @@ const ResidentPaymentDashboard = () => {
                 0
               )}
             </p>
-            <p className="text-gray-300 mt-1 text-sm">Total Paid</p>
+            <p className="text-gray-600 mt-1 text-sm">Total Paid</p>
           </div>
 
-          {/* Total Outstanding */}
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg">
-            <p className="text-red-400 text-3xl font-bold drop-shadow-md">
+          <div className="bg-white p-6 rounded-xl shadow-md">
+            <p className="text-red-600 text-2xl font-bold">
               ₱{" "}
               {payments.reduce(
                 (sum, row) => sum + Number(row.remaining_balance || 0),
                 0
               )}
             </p>
-            <p className="text-gray-300 mt-1 text-sm">Outstanding Balance</p>
+            <p className="text-gray-600 mt-1 text-sm">Outstanding Balance</p>
           </div>
 
-          {/* Last Payment Date */}
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg">
-            <p className="text-yellow-400 text-3xl font-bold drop-shadow-md">
+          <div className="bg-white p-6 rounded-xl shadow-md">
+            <p className="text-yellow-600 text-2xl font-bold">
               {payments.length > 0
                 ? new Date(payments[0].created_at).toLocaleDateString()
                 : "—"}
             </p>
-            <p className="text-gray-300 mt-1 text-sm">Last Payment</p>
+            <p className="text-gray-600 mt-1 text-sm">Last Payment</p>
           </div>
         </div>
 
-        {/* Payment Records */}
+        {/* PAYMENT RECORDS */}
         <div className="mt-10 grid gap-6">
           {payments.map((record) => (
             <div
               key={record.id}
-              className="bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col gap-4"
+              className="bg-white p-6 rounded-xl shadow-md flex flex-col gap-4"
             >
-              <p><strong>Name:</strong> {record.name}</p>
-              <p><strong>Total Bill:</strong> ₱ {record.total_bill}</p>
-              <p><strong>Paid:</strong> ₱ {(Number(record.payment_1) || 0) + (Number(record.payment_2) || 0)}</p>
-              <p><strong>Outstanding:</strong> ₱ {Number(record.remaining_balance) || 0}</p>
+              <p>
+                <strong>Name:</strong> {record.name}
+              </p>
+              <p>
+                <strong>Total Bill:</strong> ₱ {record.total_bill}
+              </p>
+              <p>
+                <strong>Paid:</strong> ₱{" "}
+                {(Number(record.payment_1) || 0) +
+                  (Number(record.payment_2) || 0)}
+              </p>
+              <p>
+                <strong>Outstanding:</strong> ₱{" "}
+                {Number(record.remaining_balance) || 0}
+              </p>
 
               {record.remaining_balance > 0 && (
                 <div className="flex gap-2 items-center mt-2">
@@ -190,6 +301,31 @@ const ResidentPaymentDashboard = () => {
           ))}
         </div>
       </main>
+
+      {/* --------------------- LOGOUT MODAL --------------------- */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-opacity-100 bg-transparent flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
+            <p className="text-lg font-semibold mb-4">Confirm to log out?</p>
+
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Yes
+              </button>
+
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
