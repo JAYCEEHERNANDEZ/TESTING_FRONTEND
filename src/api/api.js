@@ -119,3 +119,15 @@ export const fetchAllNotifications = () =>
 // Mark notification as read
 export const markNotificationAsRead = (notifId) =>
   notificationAPI.put(`/read/${notifId}`);
+
+/* ---------------------------------------------
+   KPI (Average Consumption & Monthly Usage Trend)
+--------------------------------------------- */
+export const kpiAPI = axios.create({
+  baseURL: "http://localhost:5000/api/kpi", // ✅ add /api
+  headers: { "Content-Type": "application/json" },
+});
+
+export const fetchUserKPIs = (userId, months = 6) =>
+  kpiAPI.get(`/${userId}?months=${months}`);
+

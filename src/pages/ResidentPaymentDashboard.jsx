@@ -1,23 +1,27 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { fetchUserPayments, makePayment, fetchUserNotifications, markNotificationAsRead } from "../api/api.js";
+import {
+  fetchUserPayments,
+  makePayment,
+  fetchUserNotifications,
+  markNotificationAsRead,
+} from "../api/api.js";
 import { FaTachometerAlt, FaFileInvoiceDollar, FaMoneyBillWave, FaUserCircle } from "react-icons/fa";
 
 const ResidentPaymentDashboard = () => {
   const [payments, setPayments] = useState([]);
   const [payAmount, setPayAmount] = useState({});
-  const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showLogoutModal, setShowLogoutModal] = useState(false); // <-- logout modal
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const userId = Number(localStorage.getItem("user_id"));
   const navigate = useNavigate();
 
-  /* ----------------------------- FETCH PAYMENTS ----------------------------- */
+  /* ------------------ FETCH PAYMENTS ------------------ */
   useEffect(() => {
     if (!userId) return;
-
     const loadPayments = async () => {
       try {
         const res = await fetchUserPayments(userId);
@@ -26,24 +30,20 @@ const ResidentPaymentDashboard = () => {
         console.error("❌ Error fetching payments:", err);
       }
     };
-
     loadPayments();
   }, [userId]);
 
-  /* ----------------------------- FETCH NOTIFICATIONS ----------------------------- */
+  /* ------------------ FETCH NOTIFICATIONS ------------------ */
   const loadNotifications = async () => {
     if (!userId) return;
     try {
       const res = await fetchUserNotifications(userId);
-      if (res.data.success) {
-        setNotifications(res.data.notifications);
-      }
+      if (res.data.success) setNotifications(res.data.notifications);
     } catch (err) {
       console.error("❌ Error fetching notifications:", err);
     }
   };
 
-  /* ----------------------------- MARK READ ----------------------------- */
   const handleMarkAsRead = async (notifId) => {
     try {
       await markNotificationAsRead(notifId);
@@ -55,97 +55,125 @@ const ResidentPaymentDashboard = () => {
     }
   };
 
-  /* ----------------------------- PAYMENT INPUT ----------------------------- */
-  const handleChange = (id, value) => {
-    setPayAmount((prev) => ({ ...prev, [id]: value }));
+  /* ------------------ PAYMENT HANDLERS ------------------ */
+  const handleChange = (id, paymentField, value) => {
+    let numericValue = Number(value);
+    if (numericValue < 0) numericValue = 0;
+    setPayAmount((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [paymentField]: numericValue },
+    }));
   };
 
-  /* ----------------------------- LOGOUT FUNCTION ----------------------------- */
-  const handleLogout = () => {
-    localStorage.removeItem("user_id");
-    navigate("/"); // redirect to login
-  };
+  const handlePayment = async (record, paymentField) => {
+    let currentPayment = 0;
 
-  /* ----------------------------- HANDLE PAYMENT ----------------------------- */
-  const handlePayment = async (record) => {
-    const amount = Number(payAmount[record.id] || 0);
-    if (amount <= 0 || amount > record.remaining_balance) {
-      alert("Invalid payment amount");
-      return;
+    if (paymentField === "payment_1") {
+      currentPayment = Number(payAmount[record.id]?.payment_1 || 0);
+      if (currentPayment <= 0 || currentPayment > record.remaining_balance) {
+        alert("Invalid Payment 1 amount");
+        return;
+      }
     }
 
-    try {
-      const updatedPayment = {
-        payment_1: Number((record.payment_1 || 0) + amount),
-      };
+   if (paymentField === "payment_2") {
+  if (Number(record.payment_1) === 0) {
+    alert("Cannot pay Payment 2 before Payment 1");
+    return;
+  }
 
-      const res = await makePayment(record.id, updatedPayment);
+  // Get what the user typed
+  currentPayment = Number(payAmount[record.id]?.payment_2 || 0);
+
+  // Validate before sending
+  if (currentPayment !== Number(record.remaining_balance)) {
+    alert(`Payment 2 must be exactly ₱${record.remaining_balance}`);
+    return; // Stop API call
+  }
+}
+
+    try {
+      // Send only the field being updated
+      const payload = { [paymentField]: currentPayment };
+      const res = await makePayment(record.id, payload);
+      const updatedRecord = res.data.data;
 
       setPayments((prev) =>
         prev.map((p) =>
-          p.id === record.id
+          p.id === updatedRecord.id
             ? {
                 ...p,
-                payment_1: Number(res.data.data.payment_1 || 0),
-                payment_2: Number(res.data.data.payment_2 || 0),
-                remaining_balance: Number(res.data.data.remaining_balance || 0),
+                payment_1: Number(updatedRecord.payment_1 || 0),
+                payment_2: Number(updatedRecord.payment_2 || 0),
+                remaining_balance: Number(updatedRecord.remaining_balance || 0),
               }
             : p
         )
       );
 
-      setPayAmount((prev) => ({ ...prev, [record.id]: "" }));
-      alert("Payment successful!");
+      setPayAmount((prev) => ({ ...prev, [record.id]: {} }));
+      alert(`${paymentField.replace("_", " ").toUpperCase()} successful!`);
     } catch (err) {
       console.error("❌ Payment failed:", err);
       alert(err.response?.data?.message || "Payment failed!");
     }
   };
 
-  /* ----------------------------- NAV ITEMS ----------------------------- */
+  const handleLogout = () => {
+    localStorage.removeItem("user_id");
+    navigate("/");
+  };
+
   const navItems = [
     { label: "Dashboard", path: "/resident-dashboard", icon: <FaTachometerAlt /> },
     { label: "Bills", path: "/bills", icon: <FaFileInvoiceDollar /> },
-    { label: "Payments", path: "/payment", icon: <FaMoneyBillWave /> },
+    { label: "Payments", path: "/payments", icon: <FaMoneyBillWave /> },
   ];
 
   return (
     <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
       <aside
-        className={`bg-gray-950 text-white flex flex-col transition-all duration-300 shadow-md m-2 rounded-2xl
-        ${sidebarOpen ? "w-64" : "w-20 overflow-hidden"}`}
+        className={`bg-gray-950 text-white flex flex-col transition-all duration-300 shadow-md m-2 rounded-2xl ${
+          sidebarOpen ? "w-64" : "w-20 overflow-hidden"
+        }`}
       >
-        {/* Logo / Toggle */}
-        <div className="flex items-center justify-between mt-8 mb-8 px-4">
+        <div className="flex items-center justify-between mt-8 mb-8 px-4 transition-all duration-300">
           {sidebarOpen ? (
             <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-2 cursor-pointer" onClick={() => setSidebarOpen(!sidebarOpen)}>
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+              >
                 <h1 className="text-2xl font-bold text-blue-600">💧</h1>
                 <h1 className="text-2xl font-bold text-blue-600">SWS</h1>
               </div>
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="text-2xl text-white hover:text-blue-400"
+                className="text-2xl text-white hover:text-blue-400 transition-colors"
               >
                 ☰
               </button>
             </div>
           ) : (
-            <div className="flex justify-center w-full cursor-pointer" onClick={() => setSidebarOpen(true)}>
+            <div
+              className="flex justify-center w-full cursor-pointer"
+              onClick={() => setSidebarOpen(true)}
+            >
               <h1 className="text-2xl font-bold text-blue-600">💧</h1>
             </div>
           )}
         </div>
 
-        {/* NAVIGATION */}
+        {/* Navigation */}
         <nav className="flex flex-col gap-3 mt-4">
           {navItems.map((item) => (
             <Link
               key={item.label}
               to={item.path}
-              className={`flex items-center gap-2 p-2 pr-0 hover:bg-blue-100 rounded 
-              ${sidebarOpen ? "justify-start px-4" : "justify-center"}`}
+              className={`flex items-center gap-2 p-2 pr-0 hover:bg-blue-100 rounded transition-all ${
+                sidebarOpen ? "justify-start px-4" : "justify-center"
+              }`}
             >
               <span className="text-2xl text-blue-600">{item.icon}</span>
               {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
@@ -153,17 +181,16 @@ const ResidentPaymentDashboard = () => {
           ))}
         </nav>
 
-        {/* FOOTER + LOGOUT */}
-        <div className="mt-auto mb-4 py-2 px-2 flex flex-col items-center">
+        {/* Footer */}
+        <div className="mt-auto mb-4 py-2 px-2 text-center transition-all duration-300 flex flex-col items-center">
           {sidebarOpen && (
             <span className="text-lg font-semibold text-blue-500 uppercase mb-2">
               SUCOL WATER SYSTEM
             </span>
           )}
-
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-2 text-red-500 hover:text-red-400 px-2 py-1"
+            className="flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
           >
             <FaUserCircle className="text-2xl" />
             {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
@@ -171,13 +198,15 @@ const ResidentPaymentDashboard = () => {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 p-4 relative m-2 ml-0 rounded-2xl bg-gray-900 shadow">
-        {/* HEADER */}
+      {/* Main Content */}
+      <main className="flex-1 p-4 relative m-2 ml-0">
+        {/* Header */}
         <div className="flex justify-between items-center bg-white shadow rounded-xl py-4 px-7 mb-6">
-          <span className="text-lg font-semibold text-black">Resident Payment Dashboard</span>
+          <span className="text-lg font-semibold text-black">
+            Resident Payment Dashboard
+          </span>
 
-          {/* NOTIFICATIONS */}
+          {/* Notification */}
           <div className="relative">
             <button
               onClick={() => {
@@ -202,7 +231,7 @@ const ResidentPaymentDashboard = () => {
                   notifications.map((notif) => (
                     <div
                       key={notif.id}
-                      className={`p-3 border-b cursor-pointer hover:bg-blue-50 ${
+                      className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${
                         notif.is_read === 0 ? "bg-blue-50" : ""
                       }`}
                       onClick={() => handleMarkAsRead(notif.id)}
@@ -233,7 +262,6 @@ const ResidentPaymentDashboard = () => {
             </p>
             <p className="text-gray-600 mt-1 text-sm">Total Paid</p>
           </div>
-
           <div className="bg-white p-6 rounded-xl shadow-md">
             <p className="text-red-600 text-2xl font-bold">
               ₱{" "}
@@ -244,7 +272,6 @@ const ResidentPaymentDashboard = () => {
             </p>
             <p className="text-gray-600 mt-1 text-sm">Outstanding Balance</p>
           </div>
-
           <div className="bg-white p-6 rounded-xl shadow-md">
             <p className="text-yellow-600 text-2xl font-bold">
               {payments.length > 0
@@ -255,59 +282,78 @@ const ResidentPaymentDashboard = () => {
           </div>
         </div>
 
-        {/* PAYMENT RECORDS */}
+        {/* Payment Records */}
         <div className="mt-10 grid gap-6">
           {payments.map((record) => (
             <div
               key={record.id}
-              className="bg-white p-6 rounded-xl shadow-md flex flex-col gap-4"
+              className="bg-white p-6 rounded-xl shadow-lg flex flex-col gap-4"
             >
+              <p><strong>Name:</strong> {record.name}</p>
+              <p><strong>Previous Reading:</strong> {record.previous_reading} m³</p>
+              <p><strong>Current Reading:</strong> {record.present_reading} m³</p>
+              <p><strong>Total Bill:</strong> ₱ {record.total_bill}</p>
+              <p><strong>Payment 1:</strong> ₱ {Number(record.payment_1) || 0}</p>
+              <p><strong>Payment 2:</strong> ₱ {Number(record.payment_2) || 0}</p>
+              <p><strong>Remaining Balance:</strong> ₱ {Number(record.remaining_balance) || 0}</p>
               <p>
-                <strong>Name:</strong> {record.name}
-              </p>
-              <p>
-                <strong>Total Bill:</strong> ₱ {record.total_bill}
-              </p>
-              <p>
-                <strong>Paid:</strong> ₱{" "}
-                {(Number(record.payment_1) || 0) +
-                  (Number(record.payment_2) || 0)}
-              </p>
-              <p>
-                <strong>Outstanding:</strong> ₱{" "}
-                {Number(record.remaining_balance) || 0}
+                <strong>Status:</strong>{" "}
+                <span className={Number(record.remaining_balance) === 0 ? "text-green-400" : "text-red-500"}>
+                  {Number(record.remaining_balance) === 0 ? "PAID" : "UNPAID"}
+                </span>
               </p>
 
-              {record.remaining_balance > 0 && (
+              {/* Payment 1 Input */}
+              {Number(record.remaining_balance) > 0 && Number(record.payment_1) === 0 && (
                 <div className="flex gap-2 items-center mt-2">
                   <input
                     type="number"
                     min="0"
                     max={record.remaining_balance}
-                    value={payAmount[record.id] || ""}
-                    onChange={(e) => handleChange(record.id, e.target.value)}
+                    value={payAmount[record.id]?.payment_1 || ""}
+                    onChange={(e) => handleChange(record.id, "payment_1", e.target.value)}
                     className="p-2 rounded text-black w-32"
-                    placeholder="Enter payment"
+                    placeholder="Enter Payment 1"
                   />
                   <button
-                    onClick={() => handlePayment(record)}
+                    onClick={() => handlePayment(record, "payment_1")}
                     className="bg-green-500 hover:bg-green-600 px-4 py-2 rounded"
                   >
-                    Pay
+                    Pay Payment 1
                   </button>
                 </div>
               )}
+
+              {/* Payment 2 Input */}
+{Number(record.payment_1) > 0 && Number(record.remaining_balance) > 0 && (
+  <div className="flex gap-2 items-center mt-2">
+    <input
+      type="number"
+      min="0"
+      value={payAmount[record.id]?.payment_2 || ""}
+      onChange={(e) => handleChange(record.id, "payment_2", e.target.value)}
+      className="p-2 rounded text-black w-32"
+      placeholder={`Enter exact remaining: ₱${record.remaining_balance}`}
+    />
+    <button
+      onClick={() => handlePayment(record, "payment_2")}
+      className="bg-yellow-500 hover:bg-yellow-600 px-4 py-2 rounded"
+    >
+      Pay Payment 2
+    </button>
+  </div>
+)}
+
             </div>
           ))}
         </div>
       </main>
 
-      {/* --------------------- LOGOUT MODAL --------------------- */}
+      {/* Logout Modal */}
       {showLogoutModal && (
-        <div className="fixed inset-0 bg-opacity-100 bg-transparent flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
             <p className="text-lg font-semibold mb-4">Confirm to log out?</p>
-
             <div className="flex justify-center gap-4">
               <button
                 onClick={handleLogout}
@@ -315,7 +361,6 @@ const ResidentPaymentDashboard = () => {
               >
                 Yes
               </button>
-
               <button
                 onClick={() => setShowLogoutModal(false)}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"

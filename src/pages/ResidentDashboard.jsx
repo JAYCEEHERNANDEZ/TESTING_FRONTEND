@@ -6,7 +6,7 @@ import {
   fetchUserNotifications,
   markNotificationAsRead,
 } from "../api/api.js";
-import {
+import {  
   FaTachometerAlt,
   FaFileInvoiceDollar,
   FaMoneyBillWave,
@@ -19,7 +19,7 @@ const ResidentDashboard = () => {
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showLogoutModal, setShowLogoutModal] = useState(false); // <-- modal state
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const userId = Number(localStorage.getItem("user_id"));
   const navigate = useNavigate();
@@ -80,19 +80,24 @@ const ResidentDashboard = () => {
   /* ----------------------------- LOGOUT FUNCTION ----------------------------- */
   const handleLogout = () => {
     localStorage.removeItem("user_id");
-    navigate("/"); // redirect to login/dashboard
+    navigate("/");
   };
 
   /* ----------------------------- NAV ITEMS ----------------------------- */
   const navItems = [
-    {
-      label: "Dashboard",
-      path: "/resident-dashboard",
-      icon: <FaTachometerAlt />,
-    },
+    { label: "Dashboard", path: "/resident-dashboard", icon: <FaTachometerAlt /> },
     { label: "Bills", path: "/bills", icon: <FaFileInvoiceDollar /> },
     { label: "Payments", path: "/payment", icon: <FaMoneyBillWave /> },
   ];
+
+  // Get latest consumption for current month
+  const latestConsumption = consumptions[0] || {};
+  // Get previous month data
+  const prevConsumption = consumptions[1] || {};
+
+latestConsumption.cubic_used_last_month   // Previous Month Usage
+latestConsumption.previous_reading        // Previous Month Bill
+
 
   return (
     <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
@@ -112,7 +117,6 @@ const ResidentDashboard = () => {
                 <h1 className="text-2xl font-bold text-blue-600">💧</h1>
                 <h1 className="text-2xl font-bold text-blue-600">SWS</h1>
               </div>
-
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="text-2xl text-white hover:text-blue-400 transition-colors"
@@ -140,25 +144,20 @@ const ResidentDashboard = () => {
                 ${sidebarOpen ? "justify-start px-4" : "justify-center"}`}
             >
               <span className="text-2xl text-blue-600">{item.icon}</span>
-              {sidebarOpen && (
-                <span className="text-sm font-medium">{item.label}</span>
-              )}
+              {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
             </Link>
           ))}
         </nav>
 
         {/* Sidebar Footer */}
-        <div
-          className={`mt-auto mb-4 py-2 px-2 text-center transition-all duration-300 flex flex-col items-center`}
-        >
+        <div className="mt-auto mb-4 py-2 px-2 text-center flex flex-col items-center">
           {sidebarOpen && (
             <span className="text-lg font-semibold text-blue-500 uppercase mb-2">
               SUCOL WATER SYSTEM
             </span>
           )}
-
           <button
-            onClick={() => setShowLogoutModal(true)} // <-- open modal
+            onClick={() => setShowLogoutModal(true)}
             className="flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
           >
             <FaUserCircle className="text-2xl" />
@@ -168,12 +167,10 @@ const ResidentDashboard = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 relative m-2 ml-0 rounded-2xl bg-gray-900 shadow">
+      <main className="flex-1 p-4 relative m-2 ml-0 ">
         {/* Header */}
         <div className="flex justify-between items-center bg-white shadow rounded-xl py-4 px-7 mb-6">
-          <span className="text-lg font-semibold text-black">
-            Resident Dashboard
-          </span>
+          <span className="text-lg font-semibold text-black">Resident Dashboard</span>
 
           {/* Notification Button */}
           <div className="relative">
@@ -206,9 +203,7 @@ const ResidentDashboard = () => {
                       }`}
                       onClick={() => handleMarkAsRead(notif.id)}
                     >
-                      <p className="font-semibold text-sm text-gray-800">
-                        {notif.title}
-                      </p>
+                      <p className="font-semibold text-sm text-gray-800">{notif.title}</p>
                       <p className="text-xs text-gray-600">{notif.message}</p>
                       <small className="text-gray-500 text-xs">
                         {new Date(notif.created_at).toLocaleString()}
@@ -222,44 +217,54 @@ const ResidentDashboard = () => {
         </div>
 
         {/* STAT CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-          {/* Total Consumption */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 mt-8">
+          {/* Total Consumption (Current Month) */}
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-blue-600 text-2xl font-bold">
-              {consumptions.length > 0 ? consumptions[0].cubic_used : 0} m³
-            </p>
+            <p className="text-blue-600 text-2xl font-bold">{latestConsumption.cubic_used ?? 0} m³</p>
             <p className="text-gray-600 mt-1 text-sm">Total Consumption</p>
+          </div>
+
+          {/* Previous Month Consumption */}
+          <div className="bg-white p-6 rounded-xl shadow-md">
+            <p className="text-blue-400 text-2xl font-bold">
+              {latestConsumption.cubic_used_last_month  ?? 0} m³
+            </p>
+            <p className="text-gray-600 mt-1 text-sm">Previous Month Usage</p>
           </div>
 
           {/* Current Bill */}
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-green-600 text-2xl font-bold">
-              ₱ {billing.reduce((sum, row) => sum + Number(row.current_bill || 0), 0)}
-            </p>
+            <p className="text-green-600 text-2xl font-bold">₱ {latestConsumption.current_bill ?? 0}</p>
             <p className="text-gray-600 mt-1 text-sm">Current Bill</p>
+          </div>
+
+          {/* Previous Month Bill */}
+          <div className="bg-white p-6 rounded-xl shadow-md">
+            <p className="text-green-400 text-2xl font-bold">₱ {latestConsumption.previous_reading ?? 0}</p>
+            <p className="text-gray-600 mt-1 text-sm">Previous Month Bill</p>
           </div>
 
           {/* Remaining Balance */}
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-red-600 text-2xl font-bold">
-              ₱ {billing.reduce((sum, row) => sum + Number(row.remaining_balance || 0), 0)}
-            </p>
+            <p className="text-red-600 text-2xl font-bold">₱ {latestConsumption.remaining_balance ?? 0}</p>
             <p className="text-gray-600 mt-1 text-sm">Remaining Balance</p>
           </div>
 
           {/* Last Payment */}
           <div className="bg-white p-6 rounded-xl shadow-md">
             <p className="text-yellow-600 text-2xl font-bold">
-              {billing.length > 0 ? new Date(billing[0].created_at).toLocaleDateString() : "—"}
+              {latestConsumption.created_at
+                ? new Date(latestConsumption.created_at).toLocaleDateString()
+                : "—"}
             </p>
             <p className="text-gray-600 mt-1 text-sm">Last Payment</p>
           </div>
         </div>
       </main>
 
-      {/* --------------------- LOGOUT MODAL --------------------- */}
+      {/* LOGOUT MODAL */}
       {showLogoutModal && (
-        <div className="fixed inset-0  bg-opacity-100 bg-transparent flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
             <p className="text-lg font-semibold mb-4">Confirm to log out?</p>
             <div className="flex justify-center gap-4">
