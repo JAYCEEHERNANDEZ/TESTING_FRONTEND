@@ -16,12 +16,35 @@ import {
   FaUserCircle,
 } from "react-icons/fa";
 
+// Dialog component
+const Dialog = ({ type, message, onClose }) => {
+  const bgColor = type === "success" ? "bg-green-100" : "bg-red-100";
+  const textColor = type === "success" ? "text-green-700" : "text-red-700";
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+      <div className={`p-6 rounded-xl shadow-lg w-80 ${bgColor} flex flex-col items-center`}>
+        <p className={`text-lg font-semibold ${textColor} mb-4`}>{message}</p>
+        <button
+          onClick={onClose}
+          className={`px-4 py-2 rounded bg-white hover:opacity-90 shadow`}
+        >
+          OK
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const ManageCustomers = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [customers, setCustomers] = useState([]);
   const [formData, setFormData] = useState({ name: "", username: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // Dialog state
+  const [dialog, setDialog] = useState({ show: false, type: "success", message: "" });
 
   const navigate = useNavigate();
 
@@ -44,25 +67,30 @@ const ManageCustomers = () => {
       if (res.data.success) setCustomers(res.data.message);
     } catch (err) {
       console.error(err);
+      showDialog("error", "Failed to fetch users.");
     }
   };
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
+  const showDialog = (type, message) => {
+    setDialog({ show: true, type, message });
+  };
+
   const handleAddCustomer = async () => {
     const { name, username, password } = formData;
-    if (!name || !username || !password) return alert("All fields are required.");
+    if (!name || !username || !password) return showDialog("error", "All fields are required.");
 
     try {
       const res = await registerUser({ name, username, password });
       if (res.data.success) {
-        alert("Customer Added!");
+        showDialog("success", "Customer Added Successfully!");
         setFormData({ name: "", username: "", password: "" });
         loadUsers();
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to add customer.");
+      showDialog("error", "Failed to add customer.");
     }
   };
 
@@ -70,15 +98,15 @@ const ManageCustomers = () => {
     try {
       if (user.is_active) {
         const res = await deactivateUser(user.id);
-        if (res.data.success) alert("User deactivated");
+        if (res.data.success) showDialog("success", "User deactivated");
       } else {
         const res = await reactivateUser(user.id);
-        if (res.data.success) alert("User reactivated");
+        if (res.data.success) showDialog("success", "User reactivated");
       }
       loadUsers();
     } catch (err) {
       console.error(err);
-      alert("Failed to update user status");
+      showDialog("error", "Failed to update user status");
     }
   };
 
@@ -266,6 +294,15 @@ const ManageCustomers = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Dialog */}
+      {dialog.show && (
+        <Dialog
+          type={dialog.type}
+          message={dialog.message}
+          onClose={() => setDialog({ ...dialog, show: false })}
+        />
       )}
     </div>
   );

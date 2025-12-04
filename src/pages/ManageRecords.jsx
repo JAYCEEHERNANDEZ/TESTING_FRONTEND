@@ -1,8 +1,15 @@
+// ManageRecords.jsx
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  FaTachometerAlt, FaUserCircle, FaFolderOpen, FaBell,
-  FaUsers, FaUserCog, FaFileAlt
+  FaTachometerAlt,
+  FaUserCircle,
+  FaFolderOpen,
+  FaBell,
+  FaUsers,
+  FaUserCog,
+  FaFileAlt,
+  FaPaperPlane
 } from "react-icons/fa";
 import {
   fetchAllUsersAdmin,
@@ -26,6 +33,10 @@ const ManageRecords = () => {
   const [noticeUserId, setNoticeUserId] = useState(null);
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeMessage, setNoticeMessage] = useState("");
+  const [sendingNotice, setSendingNotice] = useState(false);
+
+  // Inline notification messages
+  const [notificationMsg, setNotificationMsg] = useState({ type: "", text: "" });
 
   const navigate = useNavigate();
 
@@ -41,12 +52,13 @@ const ManageRecords = () => {
   // ------------------- Fetch Users -------------------
   useEffect(() => {
     const loadUsers = async () => {
+      setLoading(true);
       try {
-        setLoading(true);
         const res = await fetchAllUsersAdmin();
         setUsers(res.data.data || []);
       } catch (err) {
         console.error("Error fetching users:", err);
+        setNotificationMsg({ type: "error", text: "Failed to load users." });
       } finally {
         setLoading(false);
       }
@@ -55,18 +67,21 @@ const ManageRecords = () => {
   }, []);
 
   // ------------------- Fetch Overdue Users -------------------
-  const loadOverdueUsers = async () => {
-    try {
+  useEffect(() => {
+    const loadOverdueUsers = async () => {
       setLoadingOverdue(true);
-      const res = await fetchOverdueUsers();
-      setOverdueUsers(res.data.users || []);
-    } catch (err) {
-      console.error("Error fetching overdue users:", err);
-    } finally {
-      setLoadingOverdue(false);
-    }
-  };
-  useEffect(() => { loadOverdueUsers(); }, []);
+      try {
+        const res = await fetchOverdueUsers();
+        setOverdueUsers(res.data.users || []);
+      } catch (err) {
+        console.error("Error fetching overdue users:", err);
+        setNotificationMsg({ type: "error", text: "Failed to load overdue users." });
+      } finally {
+        setLoadingOverdue(false);
+      }
+    };
+    loadOverdueUsers();
+  }, []);
 
   // ------------------- Expand User Records -------------------
   const handleExpandUser = async (userId) => {
@@ -81,6 +96,7 @@ const ManageRecords = () => {
       } catch (err) {
         console.error("Error fetching user records:", err);
         setRecordsByUser(prev => ({ ...prev, [userId]: [] }));
+        setNotificationMsg({ type: "error", text: `Failed to load records for ${userId}.` });
       }
     }
     setExpandedUserId(userId);
@@ -98,12 +114,12 @@ const ManageRecords = () => {
     if (!amount || Number(amount) <= 0) return;
     try {
       await adminRecordPayment(paymentId, Number(amount));
-      alert("Payment recorded successfully!");
+      setNotificationMsg({ type: "success", text: "Payment recorded successfully." });
       const res = await fetchUserPaymentProofs(userId);
       setRecordsByUser(prev => ({ ...prev, [userId]: res.data.data || [] }));
     } catch (err) {
       console.error("Error recording payment:", err);
-      alert("Failed to record payment.");
+      setNotificationMsg({ type: "error", text: "Failed to record payment." });
     }
   };
 
@@ -116,10 +132,11 @@ const ManageRecords = () => {
   };
 
   const handleSendPersonalNotice = async () => {
-    if (!noticeTitle || !noticeMessage) {
-      alert("Please enter both title and message.");
+    if (!noticeTitle.trim() || !noticeMessage.trim()) {
+      setNotificationMsg({ type: "error", text: "Both title and message are required." });
       return;
     }
+    setSendingNotice(true);
     try {
       await sendNotificationPerUser({
         user_id: noticeUserId,
@@ -127,11 +144,13 @@ const ManageRecords = () => {
         message: noticeMessage,
         type: "personal"
       });
-      alert("Notification sent successfully!");
       setShowNoticeModal(false);
+      setNotificationMsg({ type: "success", text: "Notification sent successfully." });
     } catch (err) {
       console.error("Error sending notification:", err);
-      alert(err.response?.data?.error || "Failed to send notification.");
+      setNotificationMsg({ type: "error", text: err.response?.data?.error || "Failed to send notification." });
+    } finally {
+      setSendingNotice(false);
     }
   };
 
@@ -193,146 +212,170 @@ const ManageRecords = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex gap-6 p-8">
-
-        {/* Active Users Column */}
-        <div className="flex-1 flex flex-col gap-4">
-          <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
-            All Users
+      <main className="flex-1 flex flex-col gap-4 p-8">
+        {/* Inline Notification Message */}
+        {notificationMsg.text && (
+          <div className={`p-3 rounded mb-4 font-medium ${notificationMsg.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+            {notificationMsg.text}
           </div>
+        )}
 
-          {loading ? <p>Loading users...</p> : activeUsers.length === 0 ? <p>No active users found.</p> : (
-            activeUsers.map(user => (
-              <div key={user.id} className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition">
-                <div className="flex items-center justify-between">
-                  <button
-                    className="text-lg font-semibold text-blue-600 hover:text-blue-500"
-                    onClick={() => handleExpandUser(user.id)}
-                  >
-                    {user.name}
-                  </button>
-                  <button
-                    onClick={() => openNoticeModal(user.id)}
-                    className="ml-2 bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 text-sm"
-                  >
-                    Send Notice
-                  </button>
-                </div>
+        <div className="flex gap-6">
 
-                {expandedUserId === user.id && (
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <div className="col-span-2 flex flex-col gap-3">
-                      {recordsByUser[user.id]?.length > 0 ? recordsByUser[user.id].map(r => (
-                        <div key={r.id} className="p-4 bg-gray-200 rounded-lg flex flex-col gap-2 relative">
-                          <span className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(getStatus(r))}`}>
-                            {getStatus(r)}
-                          </span>
-                          <p><strong>Billing Month:</strong> {new Date(r.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
-                          <p><strong>Previous Reading:</strong> {r.previous_reading}</p>
-                          <p><strong>Current Reading:</strong> {r.present_reading}</p>
-                          <p><strong>Consumption:</strong> {r.cubic_used} m³</p>
-                          <p><strong>Total Bill:</strong> ₱{r.total_bill}</p>
-                          <p><strong>Payment 1:</strong> ₱{r.payment_1}</p>
-                          <p><strong>Payment 2:</strong> ₱{r.payment_2}</p>
-                          <p><strong>Remaining Balance:</strong> ₱{r.remaining_balance}</p>
-                          <p><strong>Reference Code:</strong> {r.reference_code || "N/A"}</p>
+          {/* Active Users Column */}
+          <div className="flex-1 flex flex-col gap-4">
+            <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
+              All Users
+            </div>
 
-                          {getStatus(r) !== "Paid" && (
-                            <div className="flex gap-2 mt-2">
-                              <input
-                                type="number"
-                                className="p-2 border rounded w-1/2"
-                                placeholder="Enter payment amount"
-                                onChange={e => r.adminPayment = e.target.value}
-                              />
-                              <button
-                                className="bg-green-600 p-2 rounded hover:bg-green-700 text-white"
-                                onClick={() => handleSubmitPayment(user.id, r.id, r.adminPayment)}
-                              >
-                                Record Payment
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )) : <p>No payment records found.</p>}
-                    </div>
-
-                    <div className="col-span-1 p-3 bg-white rounded-lg shadow flex flex-col items-center">
-                      <h2 className="text-lg font-semibold mb-2 text-center">Payment Proof</h2>
-                      {recordsByUser[user.id]?.[0]?.proof_url ? (
-                        <img
-                          src={`http://localhost:5000${recordsByUser[user.id][0].proof_url}`}
-                          alt="Payment Proof"
-                          className="w-60 h-70 rounded-lg shadow object-contain"
-                        />
-                      ) : <p className="text-gray-500 italic">No proof uploaded.</p>}
-                    </div>
+            {loading ? <p>Loading users...</p> : activeUsers.length === 0 ? <p>No active users found.</p> : (
+              activeUsers.map(user => (
+                <div key={user.id} className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition">
+                  <div className="flex items-center justify-between">
+                    <button
+                      className="text-lg font-semibold text-blue-600 hover:text-blue-500"
+                      onClick={() => handleExpandUser(user.id)}
+                    >
+                      {user.name}
+                    </button>
+                    <button
+                      onClick={() => openNoticeModal(user.id)}
+                      className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-1 rounded shadow hover:shadow-lg flex items-center gap-2"
+                    >
+                      <FaPaperPlane /> Send Notice
+                    </button>
                   </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
 
-        {/* Overdue Users Column */}
-        <div className="flex-1 flex flex-col gap-4">
-          <div className="flex justify-between items-center bg-red-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
-            Overdue / Notice Users
+                  {expandedUserId === user.id && (
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="col-span-2 flex flex-col gap-3">
+                        {recordsByUser[user.id]?.length > 0 ? recordsByUser[user.id].map(r => (
+                          <div key={r.id} className="p-4 bg-gray-50 rounded-lg flex flex-col gap-2 shadow relative hover:shadow-md transition">
+                            <span className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(getStatus(r))}`}>
+                              {getStatus(r)}
+                            </span>
+                            <p><strong>Billing Month:</strong> {new Date(r.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+                            <p><strong>Previous Reading:</strong> {r.previous_reading}</p>
+                            <p><strong>Current Reading:</strong> {r.present_reading}</p>
+                            <p><strong>Consumption:</strong> {r.cubic_used} m³</p>
+                            <p><strong>Total Bill:</strong> ₱{r.total_bill}</p>
+                            <p><strong>Payment 1:</strong> ₱{r.payment_1}</p>
+                            <p><strong>Payment 2:</strong> ₱{r.payment_2}</p>
+                            <p><strong>Remaining Balance:</strong> ₱{r.remaining_balance}</p>
+                            <p><strong>Reference Code:</strong> {r.reference_code || "N/A"}</p>
+
+                            {getStatus(r) !== "Paid" && (
+                              <div className="flex gap-2 mt-2">
+                                <input
+                                  type="number"
+                                  className="p-2 border rounded w-1/2 focus:ring-1 focus:ring-blue-500"
+                                  placeholder="Enter payment amount"
+                                  onChange={e => r.adminPayment = e.target.value}
+                                />
+                                <button
+                                  className="bg-green-600 p-2 rounded hover:bg-green-700 text-white transition"
+                                  onClick={() => handleSubmitPayment(user.id, r.id, r.adminPayment)}
+                                >
+                                  Record Payment
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )) : <p>No payment records found.</p>}
+                      </div>
+
+                      <div className="col-span-1 p-3 bg-white rounded-lg shadow flex flex-col items-center">
+                        <h2 className="text-lg font-semibold mb-2 text-center">Payment Proof</h2>
+                        {recordsByUser[user.id]?.[0]?.proof_url ? (
+                          <img
+                            src={`http://localhost:5000${recordsByUser[user.id][0].proof_url}`}
+                            alt="Payment Proof"
+                            className="w-60 h-70 rounded-lg shadow object-contain"
+                          />
+                        ) : <p className="text-gray-500 italic">No proof uploaded.</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
 
-          {loadingOverdue ? <p>Loading overdue users...</p> : overdueUsers.length === 0 ? <p>No overdue users or notices.</p> : (
-            overdueUsers.map(user => (
-              <div key={user.user_id} className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition flex justify-between items-center">
-                <div>
-                  <p className="text-lg font-semibold text-red-600">{user.name}</p>
-                  <p>Remaining Balance: ₱{user.remaining_balance}</p>
-                  <p>Billing Date: {new Date(user.billing_date).toLocaleDateString()}</p>
-                  <p>Due Date: {new Date(user.due_date).toLocaleDateString()}</p>
-                  <p className="text-gray-600 italic">
-                    {user.notice_sent ? "Notice already sent" : "Notice pending"}
-                  </p>
+          {/* Overdue Users Column */}
+          <div className="flex-1 flex flex-col gap-4">
+            <div className="flex justify-between items-center bg-red-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
+              Overdue / Notice Users
+            </div>
+
+            {loadingOverdue ? <p>Loading overdue users...</p> : overdueUsers.length === 0 ? <p>No overdue users or notices.</p> : (
+              overdueUsers.map(user => (
+                <div key={user.user_id} className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition flex justify-between items-center">
+                  <div>
+                    <p className="text-lg font-semibold text-red-600">{user.name}</p>
+                    <p>Remaining Balance: ₱{user.remaining_balance}</p>
+                    <p>Billing Date: {new Date(user.billing_date).toLocaleDateString()}</p>
+                    <p>Due Date: {new Date(user.due_date).toLocaleDateString()}</p>
+                    <p className="text-gray-600 italic">
+                      {user.notice_sent ? "Notice already sent" : "Notice pending"}
+                    </p>
+                  </div>
+                  {!user.notice_sent && (
+                    <button
+                      onClick={() => openNoticeModal(user.user_id)}
+                      className="bg-gradient-to-r from-red-500 to-red-700 text-white px-4 py-2 rounded shadow hover:shadow-lg flex items-center gap-2"
+                    >
+                      <FaPaperPlane /> Send Notice
+                    </button>
+                  )}
                 </div>
-                {!user.notice_sent && (
-                  <button
-                    onClick={() => openNoticeModal(user.user_id)}
-                    className="bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700"
-                  >
-                    Send Notice
-                  </button>
-                )}
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
 
-      </main>
+        {/* Notice Modal */}
+        {showNoticeModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center bg-transparent justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-96 shadow-lg animate-slide-in">
+              <h2 className="text-xl font-bold mb-4 text-blue-700 border-b pb-2">Send Personal Notification</h2>
 
-      {/* Notice Modal */}
-      {showNoticeModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-96 shadow-lg">
-            <h2 className="text-lg font-semibold mb-4">Send Personal Notification</h2>
-            <input
-              type="text"
-              placeholder="Title"
-              value={noticeTitle}
-              onChange={(e) => setNoticeTitle(e.target.value)}
-              className="w-full p-2 border rounded mb-3"
-            />
-            <textarea
-              placeholder="Message"
-              value={noticeMessage}
-              onChange={(e) => setNoticeMessage(e.target.value)}
-              className="w-full p-2 border rounded mb-3 h-24"
-            />
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowNoticeModal(false)} className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
-              <button onClick={handleSendPersonalNotice} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Send</button>
+              <label className="block mb-2 text-sm font-medium text-gray-700">Title</label>
+              <input
+                type="text"
+                placeholder="Enter notification title"
+                value={noticeTitle}
+                onChange={(e) => setNoticeTitle(e.target.value)}
+                className="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500 transition"
+              />
+
+              <label className="block mb-2 text-sm font-medium text-gray-700">Message</label>
+              <textarea
+                placeholder="Write your message here"
+                value={noticeMessage}
+                onChange={(e) => setNoticeMessage(e.target.value)}
+                className="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500 transition h-28 resize-none"
+              />
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowNoticeModal(false)}
+                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 transition"
+                  disabled={sendingNotice}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendPersonalNotice}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 transition"
+                  disabled={sendingNotice}
+                >
+                  {sendingNotice ? "Sending..." : "Send"} <FaPaperPlane />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
+        )}
+      </main>
     </div>
   );
 };
