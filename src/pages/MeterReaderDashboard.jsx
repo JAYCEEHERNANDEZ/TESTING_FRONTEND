@@ -1,190 +1,248 @@
 import React, { useState, useEffect } from "react";
-import { fetchConsumptions, addConsumption } from "../api/api";
+import { Link } from "react-router-dom";
+import {
+  FaTachometerAlt,
+  FaFolderOpen,
+  FaUserCircle
+} from "react-icons/fa";
+import { fetchConsumptions } from "../api/api.js";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 const MeterReaderDashboard = () => {
-  const [customers, setCustomers] = useState([]);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [currentReadingInput, setCurrentReadingInput] = useState("");
-  const [calculatedBill, setCalculatedBill] = useState(0);
-  const [message, setMessage] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [consumptions, setConsumptions] = useState([]);
+  const [filterMonth, setFilterMonth] = useState(""); // 1-12
+  const [filterYear, setFilterYear] = useState(""); // YYYY
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const navItems = [
+    { label: "Dashboard", path: "/meter-dashboard", icon: <FaTachometerAlt /> },
+    { label: "Record Consumption", path: "/record-consumption", icon: <FaFolderOpen /> },
+  ];
 
   useEffect(() => {
     loadConsumptions();
   }, []);
 
-  // Deduplicate by user_id and get latest record
-  const getLatestCustomers = (records) => {
-    const map = new Map();
-    records.forEach((r) => {
-      if (!map.has(r.user_id) || new Date(r.billing_date) > new Date(map.get(r.user_id).billing_date)) {
-        map.set(r.user_id, r);
-      }
-    });
-    return Array.from(map.values());
-  };
-
   const loadConsumptions = async () => {
     try {
-      const res = await fetchConsumptions(); // all consumption rows
-      const latestCustomers = getLatestCustomers(res.data.data);
-      setCustomers(latestCustomers);
+      const res = await fetchConsumptions();
+      setConsumptions(res.data?.data || []);
     } catch (err) {
-      console.error("Failed to fetch consumptions:", err);
+      console.error("Error fetching consumptions:", err);
     }
   };
 
-  const selectCustomer = (customer) => {
-    setSelectedCustomer(customer);
-    setCurrentReadingInput("");
-    setCalculatedBill(0);
-    setMessage("");
-  };
+  const filteredConsumptions = consumptions.filter((c) => {
+    const date = new Date(c.billing_date || c.created_at);
+    const monthMatch = filterMonth ? date.getMonth() + 1 === Number(filterMonth) : true;
+    const yearMatch = filterYear ? date.getFullYear() === Number(filterYear) : true;
+    return monthMatch && yearMatch;
+  });
 
-  const calculateBill = (cubicUsed) => {
-    if (cubicUsed <= 5) return 270;
-    return 270 + (cubicUsed - 5) * 17;
-  };
+  const totalUsers = consumptions.length;
+  const totalBill = filteredConsumptions.reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
+  const totalBalance = filteredConsumptions.reduce((sum, c) => sum + Number(c.remaining_balance || 0), 0);
+  const totalIncome = filteredConsumptions.reduce((sum, c) => sum + Number(c.payment_1 || 0) + Number(c.payment_2 || 0), 0);
+  const newUsers = consumptions.filter((c) => {
+    const created = new Date(c.created_at);
+    const monthMatch = filterMonth ? created.getMonth() + 1 === Number(filterMonth) : true;
+    const yearMatch = filterYear ? created.getFullYear() === Number(filterYear) : true;
+    return monthMatch && yearMatch;
+  }).length;
 
-  const handleInputChange = (e) => {
-    const value = Number(e.target.value);
-    setCurrentReadingInput(value);
-    setCalculatedBill(calculateBill(value));
-  };
+  // Chart data for last 6 months
+  const chartData = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const month = d.getMonth();
+    const year = d.getFullYear();
+    const monthName = d.toLocaleString("default", { month: "short" });
+    const monthSum = consumptions
+      .filter((c) => {
+        const date = new Date(c.billing_date);
+        return date.getMonth() === month && date.getFullYear() === year;
+      })
+      .reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
+    chartData.push({ month: `${monthName} ${year}`, total: monthSum });
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!selectedCustomer) return;
+  const years = Array.from(
+    new Set(consumptions.map((c) => new Date(c.billing_date || c.created_at).getFullYear()))
+  );
 
-    const cubicUsed = Number(currentReadingInput);
-    if (cubicUsed <= 0) {
-      setMessage("Current reading must be greater than 0.");
-      return;
-    }
-
-    const payload = {
-      user_id: selectedCustomer.user_id,
-      name: selectedCustomer.name,
-      cubic_used: cubicUsed,
-    };
-
-    try {
-      const res = await addConsumption(payload); // creates new row
-      const newRecord = res.data.data;
-
-      // Replace the old customer record with the new latest record
-      setCustomers((prev) => [
-        ...prev.filter((c) => c.user_id !== newRecord.user_id),
-        newRecord,
-      ]);
-
-      setSelectedCustomer(newRecord);
-      setMessage("New reading recorded successfully!");
-      setCurrentReadingInput("");
-      setCalculatedBill(0);
-    } catch (err) {
-      const errMsg = err.response?.data?.message || "Failed to record reading.";
-      setMessage(errMsg);
-    }
-
-    setTimeout(() => setMessage(""), 5000);
+  const handleLogout = () => {
+    localStorage.removeItem("user_id");
+    window.location.href = "/";
   };
 
   return (
-    <div className="flex bg-gradient-to-br from-gray-900 via-gray-950 to-black min-h-screen text-white">
+    <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 backdrop-blur-xl bg-white/5 border-r border-blue-500/20 shadow-xl p-6">
-        <h2 className="text-2xl font-bold text-blue-400 mb-10">Meter Reader</h2>
-        <nav className="flex flex-col gap-4 text-gray-300">
-          <a href="/dashboard" className="hover:text-blue-400">Dashboard</a>
-          <a href="/record-consumption" className="hover:text-blue-400">Record Consumption</a>
+      <aside
+        className={`bg-gray-950 text-white flex flex-col transition-all duration-300 m-2 rounded-2xl ${
+          sidebarOpen ? "w-64" : "w-20 overflow-hidden"
+        }`}
+      >
+        <div className="flex items-center justify-between mt-8 mb-8 px-4">
+          {sidebarOpen ? (
+            <div className="flex items-center justify-between w-full">
+              <h1
+                className="text-2xl font-bold text-blue-600 cursor-pointer"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+              >
+                💧 SWS
+              </h1>
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="text-2xl text-white hover:text-blue-400"
+              >
+                ☰
+              </button>
+            </div>
+          ) : (
+            <div
+              className="flex justify-center w-full cursor-pointer"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <h1 className="text-2xl font-bold text-blue-600">💧</h1>
+            </div>
+          )}
+        </div>
+
+        <nav className="flex flex-col gap-3 mt-4">
+          {navItems.map((item) => (
+            <Link
+              key={item.label}
+              to={item.path}
+              className={`flex items-center gap-2 p-2 hover:bg-blue-100 rounded transition-all ${
+                sidebarOpen ? "justify-start px-4" : "justify-center"
+              }`}
+            >
+              <span className="text-blue-600 text-2xl">{item.icon}</span>
+              {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
+            </Link>
+          ))}
         </nav>
+
+        {/* Logout / Logo */}
+        <div className="mt-auto mb-4 py-2 px-2 text-center flex flex-col items-center">
+          {sidebarOpen && <span className="text-lg font-semibold text-blue-500 uppercase mb-2">SUCOL WATER SYSTEM</span>}
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="flex items-center gap-2 text-red-500 hover:text-red-400 px-2 py-1 rounded"
+          >
+            <FaUserCircle className="text-2xl" />
+            {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
+          </button>
+        </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-10">
-        <div className="bg-blue-600/40 text-white text-xl font-semibold py-4 px-5 rounded-xl border border-blue-500/30 mb-6">
-          Record Consumption Dashboard
+      <main className="flex-1 p-8">
+        <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
+          <span className="text-xl font-bold ">Meter Reader Dashboard</span>
         </div>
 
-        {/* Customer List */}
-        {!selectedCustomer && (
-          <div className="bg-white/10 border border-gray-700 p-6 rounded-xl">
-            <h3 className="text-lg font-semibold mb-4 text-blue-300">Customers</h3>
-            <ul className="space-y-3">
-              {customers.map((c) => (
-                <li
-                  key={c.id}
-                  className="p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer"
-                  onClick={() => selectCustomer(c)}
-                >
-                  {c.name}
-                </li>
-              ))}
-            </ul>
+        {/* Filters */}
+        <div className="flex gap-4 mb-6">
+          <select
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="p-2 border rounded"
+          >
+            <option value="">All Months</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>
+                {new Date(0, i).toLocaleString("default", { month: "long" })}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filterYear}
+            onChange={(e) => setFilterYear(e.target.value)}
+            className="p-2 border rounded"
+          >
+            <option value="">All Years</option>
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-6 mt-2">
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-blue-600 text-3xl font-bold">{totalUsers}</p>
+            <p className="text-gray-600 mt-1 text-sm">Total Users</p>
           </div>
-        )}
-
-        {/* Selected Customer */}
-        {selectedCustomer && (
-          <div className="bg-white/10 border border-gray-700 p-6 rounded-xl relative">
-            {message && (
-              <div
-                className={`absolute top-4 right-4 px-4 py-2 rounded ${
-                  message.includes("successfully") ? "bg-green-600" : "bg-red-600"
-                } text-white`}
-              >
-                {message}
-              </div>
-            )}
-
-            <button
-              className="mb-6 text-blue-400 underline"
-              onClick={() => setSelectedCustomer(null)}
-            >
-              ← Back to Customers
-            </button>
-
-            {/* Customer Details */}
-            <div className="bg-gray-800 p-4 rounded-lg mb-6 border border-gray-600">
-              <h3 className="text-xl font-semibold text-blue-300 mb-4">Customer Details</h3>
-              <p><strong>Name:</strong> {selectedCustomer.name}</p>
-              <p><strong>Previous Reading:</strong> {selectedCustomer.previous_reading} m³</p>
-              <p><strong>Current Reading:</strong> {selectedCustomer.present_reading} m³</p>
-              <p><strong>Cubic Used Last Month:</strong> {selectedCustomer.cubic_used_last_month} m³</p>
-              <p><strong>Current Month Cubic Used:</strong> {selectedCustomer.cubic_used} m³</p>
-              <p><strong>Total Bill:</strong> ₱ {selectedCustomer.total_bill}</p>
-            </div>
-
-            {/* New Reading Form */}
-            <h3 className="text-lg font-semibold mb-4 text-blue-300">Enter Current Reading</h3>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block mb-1">Current Reading (m³):</label>
-                <input
-                  type="number"
-                  value={currentReadingInput}
-                  onChange={(e) => handleInputChange(e)}
-                  className="p-2 bg-gray-800 text-white rounded w-full"
-                  required
-                />
-              </div>
-
-              {currentReadingInput > 0 && (
-                <div className="md:col-span-2 text-yellow-300 font-semibold">
-                  Calculated Bill: ₱ {calculatedBill}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="md:col-span-2 p-2 rounded text-white bg-blue-500 hover:bg-blue-600"
-              >
-                Save Reading
-              </button>
-            </form>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-green-600 text-3xl font-bold">₱ {totalBill.toLocaleString()}</p>
+            <p className="text-gray-600 mt-1 text-sm">Overall Bill</p>
           </div>
-        )}
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-red-600 text-3xl font-bold">₱ {totalBalance.toLocaleString()}</p>
+            <p className="text-gray-600 mt-1 text-sm">Balance of All Consumers</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-yellow-600 text-3xl font-bold">₱ {totalIncome.toLocaleString()}</p>
+            <p className="text-gray-600 mt-1 text-sm">Total Income</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-purple-600 text-3xl font-bold">{newUsers}</p>
+            <p className="text-gray-600 mt-1 text-sm">New Users</p>
+          </div>
+        </div>
+
+        {/* 6-Month Consumption Chart */}
+        <div className="bg-white p-6 rounded-xl shadow-md mt-6">
+          <h2 className="text-lg font-semibold mb-4">Consumption Trend (Last 6 Months)</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="total" stroke="#8884d8" activeDot={{ r: 8 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       </main>
+
+      {/* Logout Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
+            <p className="text-lg font-semibold mb-4">Confirm to log out?</p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

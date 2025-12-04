@@ -11,6 +11,7 @@ export const userAPI = axios.create({
 export const loginUser = (data) => userAPI.post("/login", data);
 export const registerUser = (data) => userAPI.post("/register", data);
 export const fetchUsers = () => userAPI.get("/all");
+export const fetchUserById = (id) => userAPI.get(`/${id}`);
 
 // Reset password manually with a new password
 export const resetUserPassword = (id, newPassword) =>
@@ -121,6 +122,20 @@ export const submitReferenceCodeAPI = ({ user_id, bill_id, reference_code }) =>
     reference_code,
   });
 
+  export const uploadPaymentProof = (formData) =>
+  axios.post("http://localhost:5000/payment/upload-proof", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  // USER: Get specific user's payment proofs
+export const fetchUserPaymentProofs = (userId) =>
+  paymentAPI.get(`/proofs/user/${userId}`);
+
+// ADMIN: Get all payment proofs from all users
+export const fetchAllPaymentProofs = () =>
+  paymentAPI.get(`/proofs/all`);
+
+  
 // -----------------------------
 // ADMIN PAYMENTS
 // -----------------------------
@@ -170,6 +185,19 @@ export const fetchAllNotifications = () =>
 export const markNotificationAsRead = (notifId) =>
   notificationAPI.put(`/read/${notifId}`);
 
+//Per user//
+
+// Admin sends notification
+export const sendNotificationPerUser = (data) =>
+  notificationAPI.post("/send", data);
+
+// Fetch notifications for a specific user
+export const fetchUserNotificationsPerUser = (userId) =>
+  notificationAPI.get(`/user/${userId}`);
+
+// Mark notification as read
+export const readNotificationPerUser = (notifId) =>
+  notificationAPI.put(`/read/${notifId}`);
 // -----------------------------
 // DEACTIVATION NOTICES
 // -----------------------------

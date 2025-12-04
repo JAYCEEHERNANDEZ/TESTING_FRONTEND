@@ -31,17 +31,43 @@ const ResidentDashboard = () => {
   const loadConsumptions = async (userId) => {
     try {
       const res = await fetchConsumptionsByUser(userId);
-      const last6 = res.data?.data?.slice(-6).reverse() || [];
-      setConsumptions(last6);
+      const data = res.data?.data || [];
 
-      const totalConsumption = last6.reduce((acc, c) => acc + Number(c.cubic_used || 0), 0);
-      const totalBill = last6.reduce((acc, c) => acc + Number(c.current_bill || 0), 0);
-      const paidMonths = last6.filter((c) => Number(c.remaining_balance || 0) === 0).length;
+      const currentYear = new Date().getFullYear();
+
+      // Prepare months 1-12 with default zero
+      const months = Array.from({ length: 12 }, (_, i) => ({
+        month: i + 1,
+        cubic_used: 0,
+        current_bill: 0,
+        remaining_balance: 0,
+      }));
+
+      // Fill actual data into months array
+      data.forEach((c) => {
+        const date = new Date(c.billing_date);
+        if (date.getFullYear() === currentYear) {
+          const monthIndex = date.getMonth();
+          months[monthIndex] = {
+            month: monthIndex + 1,
+            cubic_used: Number(c.cubic_used || 0),
+            current_bill: Number(c.current_bill || 0),
+            remaining_balance: Number(c.remaining_balance || 0),
+          };
+        }
+      });
+
+      setConsumptions(months);
+
+      // Calculate KPI
+      const totalConsumption = months.reduce((acc, m) => acc + m.cubic_used, 0);
+      const totalBill = months.reduce((acc, m) => acc + m.current_bill, 0);
+      const paidMonths = months.filter((m) => m.remaining_balance === 0).length;
 
       setKpis({
-        avgConsumption: last6.length ? (totalConsumption / last6.length).toFixed(2) : 0,
-        avgBill: last6.length ? (totalBill / last6.length).toFixed(2) : 0,
-        complianceRate: last6.length ? ((paidMonths / last6.length) * 100).toFixed(0) : 0,
+        avgConsumption: (totalConsumption / 12).toFixed(2),
+        avgBill: (totalBill / 12).toFixed(2),
+        complianceRate: ((paidMonths / 12) * 100).toFixed(0),
       });
     } catch (err) {
       console.error("Failed to fetch consumptions:", err);
@@ -62,7 +88,6 @@ const ResidentDashboard = () => {
     }
   };
 
-  // Reload notifications every 10 seconds so resident sees admin notice in real-time
   useEffect(() => {
     loadNotifications();
     const interval = setInterval(loadNotifications, 10000);
@@ -92,8 +117,10 @@ const ResidentDashboard = () => {
     { label: "Payments", path: "/payment", icon: <FaMoneyBillWave /> },
   ];
 
-  const latest = consumptions[consumptions.length - 1] || {};
-  const previous = consumptions[consumptions.length - 2] || {};
+  // Get current and previous month
+  const now = new Date();
+  const currentMonthData = consumptions[now.getMonth()] || {};
+  const previousMonthData = consumptions[now.getMonth() - 1] || {};
 
   return (
     <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
@@ -186,15 +213,15 @@ const ResidentDashboard = () => {
         {/* CURRENT & PREVIOUS MONTH */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-blue-600 text-2xl font-bold">{latest?.cubic_used ?? 0} m³</p>
+            <p className="text-blue-600 text-2xl font-bold">{currentMonthData?.cubic_used ?? 0} m³</p>
             <p className="text-gray-600 mt-1 text-sm">Current Month Usage</p>
           </div>
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-blue-400 text-2xl font-bold">{previous?.cubic_used ?? 0} m³</p>
+            <p className="text-blue-400 text-2xl font-bold">{previousMonthData?.cubic_used ?? 0} m³</p>
             <p className="text-gray-600 mt-1 text-sm">Previous Month Usage</p>
           </div>
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-green-600 text-2xl font-bold">₱ {latest?.current_bill ?? 0}</p>
+            <p className="text-green-600 text-2xl font-bold">₱ {currentMonthData?.current_bill ?? 0}</p>
             <p className="text-gray-600 mt-1 text-sm">Current Bill</p>
           </div>
         </div>
@@ -203,32 +230,30 @@ const ResidentDashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
           <div className="bg-white p-6 rounded-xl shadow-md">
             <p className="text-blue-600 text-2xl font-bold">{kpis.avgConsumption} m³</p>
-            <p className="text-gray-600 mt-1 text-sm">Average Monthly Consumption</p>
+            <p className="text-gray-600 mt-1 text-sm">Average Monthly Consumption (Year)</p>
           </div>
           <div className="bg-white p-6 rounded-xl shadow-md">
             <p className="text-green-600 text-2xl font-bold">₱ {kpis.avgBill}</p>
-            <p className="text-gray-600 mt-1 text-sm">Average Monthly Bill</p>
+            <p className="text-gray-600 mt-1 text-sm">Average Monthly Bill (Year)</p>
           </div>
           <div className="bg-white p-6 rounded-xl shadow-md">
             <p className="text-red-600 text-2xl font-bold">{kpis.complianceRate}%</p>
-            <p className="text-gray-600 mt-1 text-sm">Payment Compliance Rate</p>
+            <p className="text-gray-600 mt-1 text-sm">Payment Compliance Rate (Year)</p>
           </div>
         </div>
 
         {/* CONSUMPTION TREND */}
         <div className="bg-white p-6 rounded-xl shadow-md mt-8">
-          <h2 className="text-lg font-semibold text-black mb-4">Consumption Trend (Last 6 Months)</h2>
+          <h2 className="text-lg font-semibold text-black mb-4">Consumption Trend (This Year)</h2>
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={consumptions}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
-                dataKey="billing_date"
-                tickFormatter={(month) =>
-                  new Date(month).toLocaleString("default", { month: "short" })
-                }
+                dataKey="month"
+                tickFormatter={(m) => new Date(2023, m - 1).toLocaleString("default", { month: "short" })}
               />
               <YAxis label={{ value: "m³", angle: -90, position: "insideLeft" }} />
-              <Tooltip />
+              <Tooltip formatter={(value) => `${value} m³`} />
               <Line type="monotone" dataKey="cubic_used" stroke="#1D4ED8" strokeWidth={3} />
             </LineChart>
           </ResponsiveContainer>

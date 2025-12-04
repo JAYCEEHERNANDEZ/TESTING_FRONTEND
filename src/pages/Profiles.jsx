@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   FaTachometerAlt,
   FaBell,
@@ -7,6 +7,7 @@ import {
   FaUserCog,
   FaUsers,
   FaFileAlt,
+  FaUserCircle,
 } from "react-icons/fa";
 import { fetchUsers, resetUserPassword } from "../api/api.js";
 
@@ -16,6 +17,9 @@ const Profiles = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [newPassword, setNewPassword] = useState("");
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadUsers();
@@ -49,13 +53,18 @@ const Profiles = () => {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("user_id");
+    navigate("/");
+  };
+
   const navItems = [
     { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
-    { label: "Records", path: "/manage-records", icon: <FaFolderOpen /> },
-    { label: "Notifications", path: "/notification-center", icon: <FaBell /> },
-    { label: "Profiles", path: "/profiles", icon: <FaUserCog /> },
+    { label: "User Payments", path: "/manage-records", icon: <FaFolderOpen /> },
+    { label: "Notifications Center", path: "/notification-center", icon: <FaBell /> },
+    { label: "Profiles", path: "/admin-profiles", icon: <FaUserCog /> },
     { label: "Manage Customers", path: "/manage-customers", icon: <FaUsers /> },
-    { label: "Reports", path: "/reports", icon: <FaFileAlt /> },
+    { label: "Reports", path: "/manage-records", icon: <FaFileAlt /> },
   ];
 
   const totalUsers = users.length;
@@ -109,10 +118,26 @@ const Profiles = () => {
             </Link>
           ))}
         </nav>
+
+        {/* Footer with Logout */}
+        <div className="mt-auto mb-4 py-2 px-2 text-center flex flex-col items-center">
+          {sidebarOpen && (
+            <span className="text-lg font-semibold text-blue-500 uppercase mb-2">
+              SUCOL WATER SYSTEM
+            </span>
+          )}
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="flex items-center gap-2 text-red-500 hover:text-red-400 px-2 py-1 rounded"
+          >
+            <FaUserCircle className="text-2xl" />
+            {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
+          </button>
+        </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-10">
+      <main className="flex-1 p-8">
         {/* Header */}
         <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
           <span>User Profiles</span>
@@ -133,7 +158,6 @@ const Profiles = () => {
         {/* Users Table */}
         <div className="bg-white p-6 rounded-xl shadow-md border">
           <h3 className="text-lg font-semibold mb-4 text-blue-700">User List</h3>
-
           <table className="w-full border-collapse text-gray-800">
             <thead>
               <tr className="bg-gray-100 border-b border-gray-300">
@@ -218,6 +242,29 @@ const Profiles = () => {
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Logout Modal */}
+      {showLogoutModal && (
+        <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
+            <p className="text-lg font-semibold mb-4">Confirm to log out?</p>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setShowLogoutModal(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+              >
+                Cancel
               </button>
             </div>
           </div>
