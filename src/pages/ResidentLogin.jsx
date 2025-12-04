@@ -53,11 +53,15 @@ export default function Login() {
         </h2>
 
         {error && <p className="text-red-400 mb-4 font-semibold">{error}</p>}
-        {success && <p className="text-green-300 mb-4 font-semibold">{success}</p>}
+        {success && (
+          <p className="text-green-300 mb-4 font-semibold">{success}</p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-left">
           <div>
-            <label className="block text-gray-300 font-semibold mb-2">Username</label>
+            <label className="block text-gray-300 font-semibold mb-2">
+              Username
+            </label>
             <input
               type="text"
               className="w-full border border-orange-500/50 rounded-xl px-3 py-2 bg-[#0d0b1d] text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
@@ -67,7 +71,9 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-gray-300 font-semibold mb-2">Password</label>
+            <label className="block text-gray-300 font-semibold mb-2">
+              Password
+            </label>
             <input
               type="password"
               className="w-full border border-orange-500/50 rounded-xl px-3 py-2 bg-[#0d0b1d] text-white focus:outline-none focus:ring-2 focus:ring-orange-400"

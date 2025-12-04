@@ -1,101 +1,228 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchUsers } from "../api/api"; // your existing api.js
+import {
+  FaTachometerAlt,
+  FaBell,
+  FaFolderOpen,
+  FaUserCog,
+  FaUsers,
+  FaFileAlt,
+} from "react-icons/fa";
+import { fetchUsers, resetUserPassword } from "../api/api.js";
 
 const Profiles = () => {
-  const [records, setRecords] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [users, setUsers] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
-    fetchUsers()
-      .then((res) => {
-        setRecords(res.data.message ?? []);
-      })
-      .catch((err) => console.error(err));
+    loadUsers();
   }, []);
 
+  const loadUsers = async () => {
+    try {
+      const res = await fetchUsers();
+      setUsers(res.data.message ?? []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const openResetModal = (user) => {
+    setSelectedUser(user);
+    setNewPassword("");
+    setShowModal(true);
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword) return alert("Password cannot be empty");
+
+    try {
+      await resetUserPassword(selectedUser.id, newPassword);
+      alert(`Password for ${selectedUser.username} has been changed successfully.`);
+      setShowModal(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to change password");
+    }
+  };
+
   const navItems = [
-    { label: "Dashboard", path: "/admin-dashboard" },
-    { label: "Records", path: "/records" },
-    { label: "Notification", path: "/notification-center" },
-    { label: "Profiles", path: "/profiles" },
-    { label: "Manage Customers", path: "/manage-customers" },
-    { label: "Reports", path: "/reports" },
+    { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
+    { label: "Records", path: "/manage-records", icon: <FaFolderOpen /> },
+    { label: "Notifications", path: "/notification-center", icon: <FaBell /> },
+    { label: "Profiles", path: "/profiles", icon: <FaUserCog /> },
+    { label: "Manage Customers", path: "/manage-customers", icon: <FaUsers /> },
+    { label: "Reports", path: "/reports", icon: <FaFileAlt /> },
   ];
 
+  const totalUsers = users.length;
+  const activeUsers = users.filter((u) => u.is_active === 1).length;
+
   return (
-    <div className="flex bg-gradient-to-br from-gray-900 via-gray-950 to-black min-h-screen text-white">
-
+    <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 backdrop-blur-xl bg-white/5 border-r border-blue-500/20 shadow-xl p-6">
-        <h2 className="text-2xl font-bold text-blue-400 drop-shadow-lg mb-10 tracking-wide">
-          Sucol Water System
-        </h2>
+      <aside
+        className={`bg-gray-950 text-white flex flex-col transition-all duration-300 m-2 rounded-2xl ${
+          sidebarOpen ? "w-64" : "w-20 overflow-hidden"
+        }`}
+      >
+        <div className="flex items-center justify-between mt-8 mb-8 px-4">
+          {sidebarOpen ? (
+            <div className="flex items-center justify-between w-full">
+              <h1
+                className="text-2xl font-bold text-blue-600 cursor-pointer"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+              >
+                💧 SWS
+              </h1>
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="text-2xl text-white hover:text-blue-400"
+              >
+                ☰
+              </button>
+            </div>
+          ) : (
+            <div
+              className="flex justify-center w-full cursor-pointer"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <h1 className="text-2xl font-bold text-blue-600">💧</h1>
+            </div>
+          )}
+        </div>
 
-        <nav className="flex flex-col gap-4 text-gray-300">
+        <nav className="flex flex-col gap-3 mt-4">
           {navItems.map((item) => (
             <Link
               key={item.label}
               to={item.path}
-              className="hover:text-blue-400 hover:translate-x-1 transition-all"
+              className={`flex items-center gap-2 p-2 hover:bg-blue-100 rounded transition-all ${
+                sidebarOpen ? "justify-start px-4" : "justify-center"
+              }`}
             >
-              {item.label}
+              <span className="text-blue-600 text-2xl">{item.icon}</span>
+              {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
             </Link>
           ))}
         </nav>
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* Main Content */}
       <main className="flex-1 p-10">
-        
-        {/* Title Bar */}
-        <div className="bg-blue-600/40 backdrop-blur-lg text-white text-xl font-semibold py-4 px-5 rounded-xl border border-blue-500/30 shadow-lg shadow-blue-900/40">
-          User Profiles
+        {/* Header */}
+        <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
+          <span>User Profiles</span>
         </div>
 
-        {/* PROFILES TABLE */}
-        <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 shadow-lg p-6 rounded-xl mt-10">
-          <h3 className="text-lg font-semibold mb-4 text-blue-300">Usernames</h3>
-
-          <table className="w-full border-collapse text-gray-300">
-  <thead>
-    <tr className="bg-white/5 border-b border-gray-600">
-      <th className="p-3 text-left text-blue-300">Name</th>
-      <th className="p-3 text-left text-blue-300">Status</th>
-    </tr>
-  </thead>
-
-  <tbody>
-    {records.length === 0 ? (
-      <tr>
-        <td colSpan="2" className="p-3 text-center text-gray-500">No users found...</td>
-      </tr>
-    ) : (
-      records.map((rec, index) => (
-        <tr
-          key={index}
-          className="border-b border-gray-700/50 hover:bg-white/5 transition"
-        >
-          <td className="p-3">{rec.name ?? "N/A"}</td>
-          <td className="p-3">
-            <span
-              className={
-                rec.status === "active"
-                  ? "text-green-400 font-semibold"
-                  : "text-red-400 font-semibold"
-              }
-            >
-              {rec.status ?? "N/A"}
-            </span>
-          </td>
-        </tr>
-      ))
-    )}
-  </tbody>
-</table>
-
+        {/* KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-blue-600 text-3xl font-bold">{totalUsers}</p>
+            <p className="text-gray-600 mt-1 text-sm">Total Users</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-green-600 text-3xl font-bold">{activeUsers}</p>
+            <p className="text-gray-600 mt-1 text-sm">Active Users</p>
+          </div>
         </div>
 
+        {/* Users Table */}
+        <div className="bg-white p-6 rounded-xl shadow-md border">
+          <h3 className="text-lg font-semibold mb-4 text-blue-700">User List</h3>
+
+          <table className="w-full border-collapse text-gray-800">
+            <thead>
+              <tr className="bg-gray-100 border-b border-gray-300">
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">Username</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Created At</th>
+                <th className="p-3 text-left">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="p-3 text-center text-gray-500">
+                    No users found...
+                  </td>
+                </tr>
+              ) : (
+                users.map((user, index) => (
+                  <tr
+                    key={index}
+                    className="border-b border-gray-200 hover:bg-blue-50 transition"
+                  >
+                    <td className="p-3">{user.name ?? "N/A"}</td>
+                    <td className="p-3">{user.username ?? "N/A"}</td>
+                    <td className="p-3">
+                      <span
+                        className={
+                          user.is_active === 1
+                            ? "text-green-600 font-semibold"
+                            : "text-red-600 font-semibold"
+                        }
+                      >
+                        {user.is_active === 1 ? "Active" : "Inactive"}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      {user.created_at
+                        ? new Date(user.created_at).toLocaleDateString()
+                        : "N/A"}
+                    </td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => openResetModal(user)}
+                        className="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1 rounded"
+                      >
+                        Change Password
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </main>
+
+      {/* Reset Password Modal */}
+      {showModal && selectedUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl w-96">
+            <h2 className="text-lg font-semibold mb-4">Change Password</h2>
+            <p className="mb-2">
+              User: <strong>{selectedUser.username}</strong>
+            </p>
+            <input
+              type="password"
+              placeholder="Enter new password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              className="w-full p-2 border rounded mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleChangePassword}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

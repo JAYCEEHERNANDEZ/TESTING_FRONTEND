@@ -1,328 +1,233 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { fetchAllBilling, fetchAllMonthlyIncome } from "../api/api";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+  FaTachometerAlt,
+  FaBell,
+  FaFolderOpen,
+  FaUserCog,
+  FaUsers,
+  FaFileAlt,
+} from "react-icons/fa";
+import { fetchConsumptions } from "../api/api.js";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const AdminDashboard = () => {
-  const [billingData, setBillingData] = useState([]);
-  const [monthlyIncome, setMonthlyIncome] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [consumptions, setConsumptions] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
 
-  const [filterYear, setFilterYear] = useState("");
-  const [filterMonth, setFilterMonth] = useState("");
+  const [filterMonth, setFilterMonth] = useState(""); // 1-12
+  const [filterYear, setFilterYear] = useState(""); // YYYY
+
+  const navigate = useNavigate();
 
   const navItems = [
-    { label: "Dashboard", path: "/admin-dashboard" },
-    { label: "Records", path: "/manage-records" },
-    { label: "Notifications", path: "/notification-center" },
-    { label: "Profiles", path: "/admin-profiles" },
-    { label: "Manage Customers", path: "/manage-customers" },
-    { label: "Reports", path: "/reports" },
+    { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
+    { label: "Records", path: "/manage-records", icon: <FaFolderOpen /> },
+    { label: "Notifications", path: "/notification-center", icon: <FaBell /> },
+    { label: "Profiles", path: "/admin-profiles", icon: <FaUserCog /> },
+    { label: "Manage Customers", path: "/manage-customers", icon: <FaUsers /> },
+    { label: "Reports", path: "/reports", icon: <FaFileAlt /> },
   ];
 
-  // Fetch billing data
-  const getBillingData = async () => {
-    try {
-      const res = await fetchAllBilling();
-      if (res.data.success) setBillingData(res.data.data);
-    } catch (err) {
-      console.error("Failed to fetch billing data:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch monthly income data
-  const getMonthlyIncome = async (year = "", month = "") => {
-    try {
-      const res = await fetchAllMonthlyIncome(year, month);
-      if (res.data.success) setMonthlyIncome(res.data.data);
-    } catch (err) {
-      console.error("Failed to fetch monthly income:", err);
-    }
-  };
-
-  // Initial data load
   useEffect(() => {
-    getBillingData();
-    getMonthlyIncome();
+    loadConsumptions();
+    loadNotifications();
+
+    const interval = setInterval(loadNotifications, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Periodic refresh
-  useEffect(() => {
-    const interval = setInterval(() => {
-      getBillingData();
-      getMonthlyIncome(filterYear, filterMonth);
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [filterYear, filterMonth]);
+  const loadConsumptions = async () => {
+    try {
+      const res = await fetchConsumptions();
+      setConsumptions(res.data?.data || []);
+    } catch (err) {
+      console.error("Error fetching consumptions:", err);
+    }
+  };
 
-  // Handle filter
-  const handleFilter = () => getMonthlyIncome(filterYear, filterMonth);
+  const loadNotifications = async () => {
+    try {
+      const res = await fetchNotifications();
+      const notifs = res.data?.notifications || [];
+      const adminNotifs = notifs.filter(n => n.user_id === null);
+      setNotifications(adminNotifs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)));
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
 
-  // KPIs
-  const totalUsers = billingData.length;
-  const totalBillAmount = billingData.reduce(
-    (sum, b) => sum + Number(b.total_bill || 0),
+  const handleNotifClick = (notif) => {
+    fetch(`/api/notifications/read/${notif.id}`, { method: "POST" });
+    setNotifications(prev =>
+      prev.map(n => (n.id === notif.id ? { ...n, is_read: 1 } : n))
+    );
+
+    const userIdMatch = notif.message.match(/User (\d+)/);
+    const userId = userIdMatch ? userIdMatch[1] : null;
+    if (userId) navigate(`/manage-records?user_id=${userId}`);
+  };
+
+  // Filter consumptions by month and year
+  const filteredConsumptions = consumptions.filter((c) => {
+    const date = new Date(c.billing_date || c.created_at);
+    const monthMatch = filterMonth ? date.getMonth() + 1 === Number(filterMonth) : true;
+    const yearMatch = filterYear ? date.getFullYear() === Number(filterYear) : true;
+    return monthMatch && yearMatch;
+  });
+
+  const totalUsers = consumptions.length;
+  const totalBill = filteredConsumptions.reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
+  const totalBalance = filteredConsumptions.reduce((sum, c) => sum + Number(c.remaining_balance || 0), 0);
+  const totalIncome = filteredConsumptions.reduce(
+    (sum, c) => sum + Number(c.payment_1 || 0) + Number(c.payment_2 || 0),
     0
   );
-  const totalBalance = billingData.reduce(
-    (sum, b) => sum + Number(b.remaining_balance || 0),
-    0
-  );
-  const totalIncome = billingData.reduce(
-    (sum, b) => sum + Number(b.payment_1 || 0) + Number(b.payment_2 || 0),
-    0
-  );
+  const newUsers = consumptions.filter((c) => {
+    const created = new Date(c.created_at);
+    const monthMatch = filterMonth ? created.getMonth() + 1 === Number(filterMonth) : true;
+    const yearMatch = filterYear ? created.getFullYear() === Number(filterYear) : true;
+    return monthMatch && yearMatch;
+  }).length;
 
-  // Last payment date (latest of payment_1_date or payment_2_date)
-  const lastPaymentDate =
-    billingData.length > 0
-      ? new Date(
-          Math.max(
-            ...billingData.map(
-              (b) =>
-                new Date(b.payment_2_date || b.payment_1_date || b.created_at)
-            )
-          )
-        ).toLocaleDateString()
-      : "—";
+  // Prepare chart data: last 6 months
+  const chartData = [];
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const month = d.getMonth();
+    const year = d.getFullYear();
+    const monthName = d.toLocaleString("default", { month: "short" });
+    const monthSum = consumptions
+      .filter(c => {
+        const date = new Date(c.billing_date);
+        return date.getMonth() === month && date.getFullYear() === year;
+      })
+      .reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
+    chartData.push({ month: `${monthName} ${year}`, total: monthSum });
+  }
+
+  // Get all available years for filter
+  const years = Array.from(new Set(consumptions.map(c => new Date(c.billing_date || c.created_at).getFullYear())));
 
   return (
-    <div className="flex bg-gradient-to-br from-gray-900 via-gray-950 to-black min-h-screen text-white">
+    <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
-      <aside className="w-64 backdrop-blur-xl bg-white/5 border-r border-blue-500/20 shadow-xl p-6">
-        <h2 className="text-2xl font-bold text-blue-400 drop-shadow-lg mb-10 tracking-wide">
-          Sucol Water System
-        </h2>
-        <nav className="flex flex-col gap-4 text-gray-300">
-          {navItems.map((item) => (
-            <Link
-              key={item.label}
-              to={item.path}
-              className="hover:text-blue-400 hover:translate-x-1 transition-all"
-            >
-              {item.label}
+      <aside className={`bg-gray-950 text-white flex flex-col transition-all duration-300 m-2 rounded-2xl ${sidebarOpen ? "w-64" : "w-20 overflow-hidden"}`}>
+        <div className="flex items-center justify-between mt-8 mb-8 px-4">
+          {sidebarOpen ? (
+            <div className="flex items-center justify-between w-full">
+              <h1 className="text-2xl font-bold text-blue-600 cursor-pointer" onClick={() => setSidebarOpen(!sidebarOpen)}>💧 SWS</h1>
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-2xl text-white hover:text-blue-400">☰</button>
+            </div>
+          ) : (
+            <div className="flex justify-center w-full cursor-pointer" onClick={() => setSidebarOpen(true)}>
+              <h1 className="text-2xl font-bold text-blue-600">💧</h1>
+            </div>
+          )}
+        </div>
+
+        <nav className="flex flex-col gap-3 mt-4">
+          {navItems.map(item => (
+            <Link key={item.label} to={item.path} className={`flex items-center gap-2 p-2 hover:bg-blue-100 rounded transition-all ${sidebarOpen ? "justify-start px-4" : "justify-center"}`}>
+              <span className="text-blue-600 text-2xl">{item.icon}</span>
+              {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
             </Link>
           ))}
         </nav>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 p-10">
-        {/* Title */}
-        <div className="bg-blue-600/40 backdrop-blur-lg text-white text-xl font-semibold py-4 px-5 rounded-xl border border-blue-500/30 shadow-lg shadow-blue-900/40">
-          Admin Dashboard
-        </div>
+      {/* Main */}
+      <main className="flex-1 p-10 relative">
+        {/* Header */}
+        <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
+          <span>Admin Dashboard</span>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mt-8">
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg hover:shadow-blue-800/40 transition-all">
-            <p className="text-blue-400 text-3xl font-bold drop-shadow-md">
-              {totalUsers}
-            </p>
-            <p className="text-gray-300 mt-1 text-sm">Total Users</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg hover:shadow-green-800/40 transition-all">
-            <p className="text-green-400 text-3xl font-bold drop-shadow-md">
-              ₱ {totalBillAmount.toLocaleString()}
-            </p>
-            <p className="text-gray-300 mt-1 text-sm">Total Bill Amount</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg hover:shadow-red-800/40 transition-all">
-            <p className="text-red-400 text-3xl font-bold drop-shadow-md">
-              ₱ {totalBalance.toLocaleString()}
-            </p>
-            <p className="text-gray-300 mt-1 text-sm">Outstanding Balance</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg hover:shadow-yellow-800/40 transition-all">
-            <p className="text-yellow-400 text-3xl font-bold drop-shadow-md">
-              ₱ {totalIncome.toLocaleString()}
-            </p>
-            <p className="text-gray-300 mt-1 text-sm">Total Income Collected</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 p-6 rounded-xl shadow-lg hover:shadow-purple-800/40 transition-all">
-            <p className="text-purple-400 text-3xl font-bold drop-shadow-md">
-              {lastPaymentDate}
-            </p>
-            <p className="text-gray-300 mt-1 text-sm">Last Payment Date</p>
+          {/* Notifications */}
+          <div className="relative">
+            <button onClick={() => setShowNotifications(!showNotifications)} className="bg-blue-500 hover:bg-blue-400 p-2 rounded-full relative">
+              🔔
+              {notifications.filter(n => n.is_read === 0).length > 0 && (
+                <span className="absolute top-0 right-0 bg-red-500 rounded-full w-4 h-4 text-xs text-white flex items-center justify-center">
+                  {notifications.filter(n => n.is_read === 0).length}
+                </span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-96 bg-gray-50 border border-gray-300 rounded shadow-lg z-50 overflow-y-auto max-h-[28rem]">
+                {notifications.length === 0 ? (
+                  <p className="p-4 text-gray-600 text-center">No notifications</p>
+                ) : (
+                  notifications.map(notif => (
+                    <div key={notif.id} className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${notif.is_read === 0 ? "bg-blue-50" : ""}`} onClick={() => handleNotifClick(notif)}>
+                      <p className="font-semibold text-sm text-gray-800">{notif.title}</p>
+                      <p className="text-xs text-gray-600">{notif.message}</p>
+                      <small className="text-gray-500 text-xs">{new Date(notif.created_at).toLocaleString()}</small>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Billing Table */}
-        <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 shadow-lg p-6 rounded-xl mt-10 overflow-x-auto">
-          <h3 className="text-lg font-semibold mb-4 text-blue-300">
-            User Billing Records
-          </h3>
-          {loading ? (
-            <p className="text-gray-300">Loading...</p>
-          ) : (
-            <table className="w-full text-left border-collapse text-gray-300">
-              <thead>
-                <tr className="bg-white/5">
-                  {[
-                    "User ID",
-                    "Name",
-                    "Cubic Used",
-                    "Current Bill",
-                    "Total Bill",
-                    "Payment 1",
-                    "Payment 1 Date",
-                    "Payment 2",
-                    "Payment 2 Date",
-                    "Remaining Balance",
-                  ].map((col) => (
-                    <th
-                      key={col}
-                      className="border-b border-gray-600 p-2 text-blue-300"
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {billingData.map((row) => (
-                  <tr key={row.id} className="hover:bg-white/5 transition">
-                    <td className="border-b border-gray-700/50 p-2">
-                      {row.user_id}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      {row.name}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      {row.cubic_used}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      ₱ {row.current_bill}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      ₱ {row.total_bill}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      ₱ {Number(row.payment_1 || 0).toLocaleString()}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      {row.payment_1_date
-                        ? new Date(row.payment_1_date).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      ₱ {Number(row.payment_2 || 0).toLocaleString()}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      {row.payment_2_date
-                        ? new Date(row.payment_2_date).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td className="border-b border-gray-700/50 p-2">
-                      ₱ {row.remaining_balance}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-
-        {/* Monthly Income Filter */}
-        <div className="flex gap-4 items-center mt-10">
-          <select
-            className="p-2 rounded bg-gray-800 text-white"
-            value={filterYear}
-            onChange={(e) => setFilterYear(e.target.value)}
-          >
-            <option value="">All Years</option>
-            {[...new Set(monthlyIncome.map((m) => m.year))].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="p-2 rounded bg-gray-800 text-white"
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-          >
+        {/* Filters */}
+        <div className="flex gap-4 mb-6">
+          <select value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} className="p-2 border rounded">
             <option value="">All Months</option>
-            {[...Array(12)].map((_, idx) => (
-              <option key={idx + 1} value={idx + 1}>
-                {new Date(0, idx).toLocaleString("default", { month: "long" })}
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i + 1} value={i + 1}>
+                {new Date(0, i).toLocaleString("default", { month: "long" })}
               </option>
             ))}
           </select>
 
-          <button
-            className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600 transition"
-            onClick={handleFilter}
-          >
-            Filter
-          </button>
+          <select value={filterYear} onChange={(e) => setFilterYear(e.target.value)} className="p-2 border rounded">
+            <option value="">All Years</option>
+            {years.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Monthly Income Table */}
-        <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 shadow-lg p-6 rounded-xl mt-4 overflow-x-auto">
-          <h3 className="text-lg font-semibold mb-4 text-blue-300">
-            Monthly Income
-          </h3>
-          <table className="w-full text-left border-collapse text-gray-300">
-            <thead>
-              <tr className="bg-white/5">
-                {["Month", "Year", "Total Income"].map((col) => (
-                  <th
-                    key={col}
-                    className="border-b border-gray-600 p-2 text-blue-300"
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {monthlyIncome.map((row, idx) => (
-                <tr key={idx} className="hover:bg-white/5 transition">
-                  <td className="border-b border-gray-700/50 p-2">
-                    {row.month}
-                  </td>
-                  <td className="border-b border-gray-700/50 p-2">
-                    {row.year}
-                  </td>
-                  <td className="border-b border-gray-700/50 p-2">
-                    ₱ {Number(row.total_income).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-6 mt-2">
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-blue-600 text-3xl font-bold">{totalUsers}</p>
+            <p className="text-gray-600 mt-1 text-sm">Total Users</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-green-600 text-3xl font-bold">₱ {totalBill.toLocaleString()}</p>
+            <p className="text-gray-600 mt-1 text-sm">Overall Bill</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-red-600 text-3xl font-bold">₱ {totalBalance.toLocaleString()}</p>
+            <p className="text-gray-600 mt-1 text-sm">Balance of All Consumers</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-yellow-600 text-3xl font-bold">₱ {totalIncome.toLocaleString()}</p>
+            <p className="text-gray-600 mt-1 text-sm">Total Income</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md border">
+            <p className="text-purple-600 text-3xl font-bold">{newUsers}</p>
+            <p className="text-gray-600 mt-1 text-sm">New Users</p>
+          </div>
         </div>
 
-        {/* Monthly Income Chart */}
-        <div className="bg-white/10 backdrop-blur-xl border border-gray-700/40 shadow-lg p-6 rounded-xl mt-10">
-          <h3 className="text-lg font-semibold mb-4 text-blue-300">
-            Monthly Income Chart
-          </h3>
+        {/* 6-Month Consumption Chart */}
+        <div className="bg-white p-6 rounded-xl shadow-md mt-6">
+          <h2 className="text-lg font-semibold mb-4">Consumption Trend (Last 6 Months)</h2>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart
-              data={monthlyIncome}
-              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#444" />
-              <XAxis dataKey="month" stroke="#ccc" />
-              <YAxis stroke="#ccc" />
+            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
               <Tooltip />
-              <Legend />
-              <Bar dataKey="total_income" name="Income" fill="#facc15" />
-            </BarChart>
+              <Line type="monotone" dataKey="total" stroke="#8884d8" activeDot={{ r: 8 }} />
+            </LineChart>
           </ResponsiveContainer>
         </div>
       </main>

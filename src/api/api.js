@@ -11,7 +11,17 @@ export const userAPI = axios.create({
 export const loginUser = (data) => userAPI.post("/login", data);
 export const registerUser = (data) => userAPI.post("/register", data);
 export const fetchUsers = () => userAPI.get("/all");
-export const deleteUser = (id) => userAPI.delete(`/delete/${id}`);
+
+// Reset password manually with a new password
+export const resetUserPassword = (id, newPassword) =>
+  userAPI.post(`/reset-password/${id}`, { newPassword });
+
+//export const deleteUser = (id) => userAPI.delete(`/delete/${id}`);
+
+// ✅ Replace deleteUser with deactivate/reactivate
+export const deactivateUser = (id) => userAPI.put(`/deactivate/${id}`);
+export const reactivateUser = (id) => userAPI.put(`/reactivate/${id}`);
+
 
 /* ---------------------------------------------
    ADMIN + METER READER
@@ -60,12 +70,10 @@ export const billingAPI = axios.create({
 });
 
 // Fetch individual user's billing records
-export const fetchUserBilling = 
-  (userId) => billingAPI.get(`/user/${userId}`);
+export const fetchUserBilling = (userId) => billingAPI.get(`/user/${userId}`);
 
 // Fetch all billing records (Admin)
-export const fetchAllBilling = () =>
-  billingAPI.get(`/all`);
+export const fetchAllBilling = () => billingAPI.get(`/all`);
 
 /* ---------------------------------------------
    MONTHLY INCOME
@@ -78,29 +86,71 @@ export const monthlyIncomeAPI = axios.create({
 // Fetch all monthly income records (Admin)
 export const fetchAllMonthlyIncome = () => monthlyIncomeAPI.get("/all");
 
-
-// PAYMENTS
+/* ---------------------------------------------
+   PAYMENTS
+--------------------------------------------- */
 export const paymentAPI = axios.create({
   baseURL: "http://localhost:5000/payment",
   headers: { "Content-Type": "application/json" },
 });
 
-// Fetch payments for resident
+// Fetch payments for a specific user
 export const fetchUserPayments = (userId) =>
   paymentAPI.get(`/user/${userId}`);
 
-// Make/update a payment
-/* ---------------------------------------------
-   PAYMENTS
---------------------------------------------- */
-export const makePayment = (paymentId, data) =>
-  paymentAPI.patch(`/pay/${paymentId}`, data);
+// Submit a payment for a single bill
+export const submitPayment = (paymentId, amount, reference_code) =>
+  paymentAPI.patch(`/pay/${paymentId}`, {
+    amount,
+    reference_code,
+  });
+
+// Submit payment for multiple bills (Pay All)
+export const submitPayAll = (billIds = [], amount, reference_code) =>
+  paymentAPI.patch(`/pay/all`, {
+    bill_ids: billIds,
+    amount,
+    reference_code,
+  });
+
+// Submit reference code
+export const submitReferenceCodeAPI = ({ user_id, bill_id, reference_code }) =>
+  paymentAPI.post("/submit-reference", {
+    user_id,
+    bill_id,
+    reference_code,
+  });
+
+// -----------------------------
+// ADMIN PAYMENTS
+// -----------------------------
+export const adminPaymentAPI = axios.create({
+  baseURL: "http://localhost:5000/payment", // matches backend
+  headers: { "Content-Type": "application/json" },
+});
+
+// Fetch pending payments for a user
+export const fetchUserPendingPayments = (userId) =>
+  adminPaymentAPI.get(`/user/${userId}/pending`);
+
+// Admin records a payment for a bill
+// Admin records a payment for a specific user's bill
+export const adminRecordPayment = (paymentId, amount) =>
+  paymentAPI.post(`/record`, { payment_id: paymentId, amount });
+
+// Admin marks payment status
+export const adminMarkPaymentStatus = (paymentId, status) =>
+  adminPaymentAPI.patch(`/pay/${paymentId}`, { status });
+
+// Fetch all users for dropdown
+export const fetchAllUsersAdmin = () =>
+  adminPaymentAPI.get("/all-users");
 
 /* ---------------------------------------------
-   NOTIFICATIONS
+   NOTIFICATIONS / REMINDERS
 --------------------------------------------- */
 export const notificationAPI = axios.create({
-  baseURL: "http://localhost:5000/notifications", // singular, matches router
+  baseURL: "http://localhost:5000/notifications",
   headers: { "Content-Type": "application/json" },
 });
 
@@ -120,14 +170,22 @@ export const fetchAllNotifications = () =>
 export const markNotificationAsRead = (notifId) =>
   notificationAPI.put(`/read/${notifId}`);
 
-/* ---------------------------------------------
-   KPI (Average Consumption & Monthly Usage Trend)
---------------------------------------------- */
-export const kpiAPI = axios.create({
-  baseURL: "http://localhost:5000/api/kpi", // ✅ add /api
+// -----------------------------
+// DEACTIVATION NOTICES
+// -----------------------------
+export const noticeAPI = axios.create({
+  baseURL: "http://localhost:5000/deact-notice",
   headers: { "Content-Type": "application/json" },
 });
 
-export const fetchUserKPIs = (userId, months = 6) =>
-  kpiAPI.get(`/${userId}?months=${months}`);
+// ADMIN – Fetch overdue users
+export const fetchOverdueUsers = () => noticeAPI.get("/overdue");
 
+// ADMIN – Send notice to specific user
+export const sendDeactNotice = (data) => noticeAPI.post("/send", data);
+
+// USER – Fetch their own notices
+export const fetchUserNotices = (userId) => noticeAPI.get(`/user/${userId}`);
+
+// USER – Mark as read
+export const markNoticeAsRead = (id) => noticeAPI.put(`/read/${id}`);

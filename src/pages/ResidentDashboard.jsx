@@ -1,147 +1,127 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { FaTachometerAlt, FaMoneyBillWave, FaUserCircle } from "react-icons/fa";
 import {
-  fetchUserBilling,
-  fetchConsumptionsByUser,
-  fetchUserNotifications,
-  markNotificationAsRead,
-} from "../api/api.js";
-import {  
-  FaTachometerAlt,
-  FaFileInvoiceDollar,
-  FaMoneyBillWave,
-  FaUserCircle,
-} from "react-icons/fa";
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { fetchConsumptionsByUser, fetchUserNotices, markNoticeAsRead } from "../api/api";
 
 const ResidentDashboard = () => {
-  const [billing, setBilling] = useState([]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [consumptions, setConsumptions] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [kpis, setKpis] = useState({ avgConsumption: 0, avgBill: 0, complianceRate: 0 });
 
-  const userId = Number(localStorage.getItem("user_id"));
   const navigate = useNavigate();
+  const userId = localStorage.getItem("user_id");
 
-  /* ----------------------------- FETCH BILLING ----------------------------- */
+  // -------------------- LOAD CONSUMPTIONS --------------------
   useEffect(() => {
-    if (!userId) return;
-    const loadBilling = async () => {
-      try {
-        const res = await fetchUserBilling(userId);
-        setBilling(res.data.data || []);
-      } catch (error) {
-        console.error("❌ Error loading billing:", error);
-      }
-    };
-    loadBilling();
+    if (userId) loadConsumptions(userId);
   }, [userId]);
 
-  /* ----------------------------- FETCH CONSUMPTIONS ----------------------------- */
-  useEffect(() => {
-    if (!userId) return;
-    const loadConsumptions = async () => {
-      try {
-        const res = await fetchConsumptionsByUser(userId);
-        setConsumptions(res.data.data || []);
-      } catch (error) {
-        console.error("❌ Error loading consumptions:", error);
-      }
-    };
-    loadConsumptions();
-  }, [userId]);
-
-  /* ----------------------------- FETCH NOTIFICATIONS ----------------------------- */
-  const loadNotifications = async () => {
-    if (!userId) return;
+  const loadConsumptions = async (userId) => {
     try {
-      const res = await fetchUserNotifications(userId);
-      if (res.data.success) {
-        setNotifications(res.data.notifications);
-      }
-    } catch (error) {
-      console.error("❌ Error loading notifications:", error);
+      const res = await fetchConsumptionsByUser(userId);
+      const last6 = res.data?.data?.slice(-6).reverse() || [];
+      setConsumptions(last6);
+
+      const totalConsumption = last6.reduce((acc, c) => acc + Number(c.cubic_used || 0), 0);
+      const totalBill = last6.reduce((acc, c) => acc + Number(c.current_bill || 0), 0);
+      const paidMonths = last6.filter((c) => Number(c.remaining_balance || 0) === 0).length;
+
+      setKpis({
+        avgConsumption: last6.length ? (totalConsumption / last6.length).toFixed(2) : 0,
+        avgBill: last6.length ? (totalBill / last6.length).toFixed(2) : 0,
+        complianceRate: last6.length ? ((paidMonths / last6.length) * 100).toFixed(0) : 0,
+      });
+    } catch (err) {
+      console.error("Failed to fetch consumptions:", err);
     }
   };
 
-  /* ----------------------------- MARK NOTIFICATION AS READ ----------------------------- */
+  // -------------------- LOAD NOTIFICATIONS --------------------
+  const loadNotifications = async () => {
+    try {
+      const res = await fetchUserNotices(userId);
+      const data = res.data?.notifications || res.notifications || [];
+
+      const userNotifs = data.filter((n) => n.user_id === null || Number(n.user_id) === Number(userId));
+      const sorted = userNotifs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setNotifications(sorted);
+    } catch (err) {
+      console.error("Error loading notifications:", err);
+    }
+  };
+
+  // Reload notifications every 10 seconds so resident sees admin notice in real-time
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // -------------------- MARK AS READ --------------------
   const handleMarkAsRead = async (notifId) => {
     try {
-      await markNotificationAsRead(notifId);
+      await markNoticeAsRead(notifId);
       setNotifications((prev) =>
         prev.map((n) => (n.id === notifId ? { ...n, is_read: 1 } : n))
       );
     } catch (err) {
-      console.error("❌ Failed to mark notification as read:", err);
+      console.error("Error marking as read:", err);
     }
   };
 
-  /* ----------------------------- LOGOUT FUNCTION ----------------------------- */
+  // -------------------- LOGOUT --------------------
   const handleLogout = () => {
     localStorage.removeItem("user_id");
     navigate("/");
   };
 
-  /* ----------------------------- NAV ITEMS ----------------------------- */
   const navItems = [
     { label: "Dashboard", path: "/resident-dashboard", icon: <FaTachometerAlt /> },
-    { label: "Bills", path: "/bills", icon: <FaFileInvoiceDollar /> },
     { label: "Payments", path: "/payment", icon: <FaMoneyBillWave /> },
   ];
 
-  // Get latest consumption for current month
-  const latestConsumption = consumptions[0] || {};
-  // Get previous month data
-  const prevConsumption = consumptions[1] || {};
-
-latestConsumption.cubic_used_last_month   // Previous Month Usage
-latestConsumption.previous_reading        // Previous Month Bill
-
+  const latest = consumptions[consumptions.length - 1] || {};
+  const previous = consumptions[consumptions.length - 2] || {};
 
   return (
     <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
-      {/* Sidebar */}
+      {/* SIDEBAR */}
       <aside
         className={`bg-gray-950 text-white flex flex-col transition-all duration-300 shadow-md m-2 rounded-2xl
-          ${sidebarOpen ? "w-64" : "w-20 overflow-hidden"}`}
+        ${sidebarOpen ? "w-64" : "w-20 overflow-hidden"}`}
       >
-        {/* Logo / Top */}
-        <div className="flex items-center justify-between mt-8 mb-8 px-4 transition-all duration-300">
+        <div className="flex items-center justify-between mt-8 mb-8 px-4">
           {sidebarOpen ? (
             <div className="flex items-center justify-between w-full">
-              <div
-                className="flex items-center gap-2 cursor-pointer"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <h1 className="text-2xl font-bold text-blue-600">💧</h1>
-                <h1 className="text-2xl font-bold text-blue-600">SWS</h1>
-              </div>
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="text-2xl text-white hover:text-blue-400 transition-colors"
-              >
-                ☰
-              </button>
+              <h1 className="text-2xl font-bold text-blue-600 cursor-pointer" onClick={() => setSidebarOpen(!sidebarOpen)}>💧 SWS</h1>
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-2xl text-white hover:text-blue-400">☰</button>
             </div>
           ) : (
-            <div
-              className="flex justify-center w-full cursor-pointer"
-              onClick={() => setSidebarOpen(true)}
-            >
+            <div className="flex justify-center w-full cursor-pointer" onClick={() => setSidebarOpen(true)}>
               <h1 className="text-2xl font-bold text-blue-600">💧</h1>
             </div>
           )}
         </div>
 
-        {/* Navigation Items */}
         <nav className="flex flex-col gap-3 mt-4">
           {navItems.map((item) => (
             <Link
               key={item.label}
               to={item.path}
               className={`flex items-center gap-2 p-2 pr-0 hover:bg-blue-100 rounded transition-all
-                ${sidebarOpen ? "justify-start px-4" : "justify-center"}`}
+              ${sidebarOpen ? "justify-start px-4" : "justify-center"}`}
             >
               <span className="text-2xl text-blue-600">{item.icon}</span>
               {sidebarOpen && <span className="text-sm font-medium">{item.label}</span>}
@@ -149,16 +129,11 @@ latestConsumption.previous_reading        // Previous Month Bill
           ))}
         </nav>
 
-        {/* Sidebar Footer */}
         <div className="mt-auto mb-4 py-2 px-2 text-center flex flex-col items-center">
-          {sidebarOpen && (
-            <span className="text-lg font-semibold text-blue-500 uppercase mb-2">
-              SUCOL WATER SYSTEM
-            </span>
-          )}
+          {sidebarOpen && <span className="text-lg font-semibold text-blue-500 uppercase mb-2">SUCOL WATER SYSTEM</span>}
           <button
             onClick={() => setShowLogoutModal(true)}
-            className="flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors px-2 py-1 rounded"
+            className="flex items-center gap-2 text-red-500 hover:text-red-400 px-2 py-1 rounded"
           >
             <FaUserCircle className="text-2xl" />
             {sidebarOpen && <span className="text-sm font-medium">Logout</span>}
@@ -166,30 +141,26 @@ latestConsumption.previous_reading        // Previous Month Bill
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 p-4 relative m-2 ml-0 ">
-        {/* Header */}
+      {/* MAIN CONTENT */}
+      <main className="flex-1 p-4 relative m-2 ml-0">
+        {/* HEADER */}
         <div className="flex justify-between items-center bg-white shadow rounded-xl py-4 px-7 mb-6">
           <span className="text-lg font-semibold text-black">Resident Dashboard</span>
 
-          {/* Notification Button */}
+          {/* NOTIFICATIONS */}
           <div className="relative">
             <button
-              onClick={() => {
-                setShowNotifications(!showNotifications);
-                if (!showNotifications) loadNotifications();
-              }}
-              className="bg-blue-500 hover:bg-blue-200 p-2 rounded-full relative"
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="bg-blue-500 hover:bg-blue-400 text-white p-2 rounded-full relative"
             >
               🔔
-              {notifications.some((n) => n.is_read === 0) && (
+              {notifications.filter((n) => Number(n.is_read) === 0).length > 0 && (
                 <span className="absolute top-0 right-0 bg-red-500 rounded-full w-4 h-4 text-xs text-white flex items-center justify-center">
-                  {notifications.filter((n) => n.is_read === 0).length}
+                  {notifications.filter((n) => Number(n.is_read) === 0).length}
                 </span>
               )}
             </button>
 
-            {/* Notification Panel */}
             {showNotifications && (
               <div className="absolute right-0 mt-2 w-96 bg-gray-50 border border-gray-300 rounded shadow-lg z-50 overflow-y-auto max-h-[28rem]">
                 {notifications.length === 0 ? (
@@ -198,16 +169,12 @@ latestConsumption.previous_reading        // Previous Month Bill
                   notifications.map((notif) => (
                     <div
                       key={notif.id}
-                      className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${
-                        notif.is_read === 0 ? "bg-blue-50" : ""
-                      }`}
+                      className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${Number(notif.is_read) === 0 ? "bg-blue-50" : ""}`}
                       onClick={() => handleMarkAsRead(notif.id)}
                     >
                       <p className="font-semibold text-sm text-gray-800">{notif.title}</p>
                       <p className="text-xs text-gray-600">{notif.message}</p>
-                      <small className="text-gray-500 text-xs">
-                        {new Date(notif.created_at).toLocaleString()}
-                      </small>
+                      <small className="text-gray-500 text-xs">{new Date(notif.created_at).toLocaleString()}</small>
                     </div>
                   ))
                 )}
@@ -216,49 +183,55 @@ latestConsumption.previous_reading        // Previous Month Bill
           </div>
         </div>
 
-        {/* STAT CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 mt-8">
-          {/* Total Consumption (Current Month) */}
+        {/* CURRENT & PREVIOUS MONTH */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-blue-600 text-2xl font-bold">{latestConsumption.cubic_used ?? 0} m³</p>
-            <p className="text-gray-600 mt-1 text-sm">Total Consumption</p>
+            <p className="text-blue-600 text-2xl font-bold">{latest?.cubic_used ?? 0} m³</p>
+            <p className="text-gray-600 mt-1 text-sm">Current Month Usage</p>
           </div>
-
-          {/* Previous Month Consumption */}
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-blue-400 text-2xl font-bold">
-              {latestConsumption.cubic_used_last_month  ?? 0} m³
-            </p>
+            <p className="text-blue-400 text-2xl font-bold">{previous?.cubic_used ?? 0} m³</p>
             <p className="text-gray-600 mt-1 text-sm">Previous Month Usage</p>
           </div>
-
-          {/* Current Bill */}
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-green-600 text-2xl font-bold">₱ {latestConsumption.current_bill ?? 0}</p>
+            <p className="text-green-600 text-2xl font-bold">₱ {latest?.current_bill ?? 0}</p>
             <p className="text-gray-600 mt-1 text-sm">Current Bill</p>
           </div>
+        </div>
 
-          {/* Previous Month Bill */}
+        {/* KPI CARDS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
           <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-green-400 text-2xl font-bold">₱ {latestConsumption.previous_reading ?? 0}</p>
-            <p className="text-gray-600 mt-1 text-sm">Previous Month Bill</p>
+            <p className="text-blue-600 text-2xl font-bold">{kpis.avgConsumption} m³</p>
+            <p className="text-gray-600 mt-1 text-sm">Average Monthly Consumption</p>
           </div>
+          <div className="bg-white p-6 rounded-xl shadow-md">
+            <p className="text-green-600 text-2xl font-bold">₱ {kpis.avgBill}</p>
+            <p className="text-gray-600 mt-1 text-sm">Average Monthly Bill</p>
+          </div>
+          <div className="bg-white p-6 rounded-xl shadow-md">
+            <p className="text-red-600 text-2xl font-bold">{kpis.complianceRate}%</p>
+            <p className="text-gray-600 mt-1 text-sm">Payment Compliance Rate</p>
+          </div>
+        </div>
 
-          {/* Remaining Balance */}
-          <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-red-600 text-2xl font-bold">₱ {latestConsumption.remaining_balance ?? 0}</p>
-            <p className="text-gray-600 mt-1 text-sm">Remaining Balance</p>
-          </div>
-
-          {/* Last Payment */}
-          <div className="bg-white p-6 rounded-xl shadow-md">
-            <p className="text-yellow-600 text-2xl font-bold">
-              {latestConsumption.created_at
-                ? new Date(latestConsumption.created_at).toLocaleDateString()
-                : "—"}
-            </p>
-            <p className="text-gray-600 mt-1 text-sm">Last Payment</p>
-          </div>
+        {/* CONSUMPTION TREND */}
+        <div className="bg-white p-6 rounded-xl shadow-md mt-8">
+          <h2 className="text-lg font-semibold text-black mb-4">Consumption Trend (Last 6 Months)</h2>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={consumptions}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="billing_date"
+                tickFormatter={(month) =>
+                  new Date(month).toLocaleString("default", { month: "short" })
+                }
+              />
+              <YAxis label={{ value: "m³", angle: -90, position: "insideLeft" }} />
+              <Tooltip />
+              <Line type="monotone" dataKey="cubic_used" stroke="#1D4ED8" strokeWidth={3} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </main>
 
@@ -268,18 +241,8 @@ latestConsumption.previous_reading        // Previous Month Bill
           <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
             <p className="text-lg font-semibold mb-4">Confirm to log out?</p>
             <div className="flex justify-center gap-4">
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => setShowLogoutModal(false)}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
-              >
-                Cancel
-              </button>
+              <button onClick={handleLogout} className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Yes</button>
+              <button onClick={() => setShowLogoutModal(false)} className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400">Cancel</button>
             </div>
           </div>
         </div>

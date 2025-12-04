@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { fetchConsumptions, updateConsumption } from "../api/api";
+import { fetchConsumptions, addConsumption } from "../api/api";
 
 const MeterReaderDashboard = () => {
   const [customers, setCustomers] = useState([]);
@@ -12,10 +12,22 @@ const MeterReaderDashboard = () => {
     loadConsumptions();
   }, []);
 
+  // Deduplicate by user_id and get latest record
+  const getLatestCustomers = (records) => {
+    const map = new Map();
+    records.forEach((r) => {
+      if (!map.has(r.user_id) || new Date(r.billing_date) > new Date(map.get(r.user_id).billing_date)) {
+        map.set(r.user_id, r);
+      }
+    });
+    return Array.from(map.values());
+  };
+
   const loadConsumptions = async () => {
     try {
-      const res = await fetchConsumptions();
-      setCustomers(res.data.data);
+      const res = await fetchConsumptions(); // all consumption rows
+      const latestCustomers = getLatestCustomers(res.data.data);
+      setCustomers(latestCustomers);
     } catch (err) {
       console.error("Failed to fetch consumptions:", err);
     }
@@ -24,11 +36,10 @@ const MeterReaderDashboard = () => {
   const selectCustomer = (customer) => {
     setSelectedCustomer(customer);
     setCurrentReadingInput("");
-    setCalculatedBill(customer.present_reading);
+    setCalculatedBill(0);
     setMessage("");
   };
 
-  // Billing calculation
   const calculateBill = (cubicUsed) => {
     if (cubicUsed <= 5) return 270;
     return 270 + (cubicUsed - 5) * 17;
@@ -40,43 +51,38 @@ const MeterReaderDashboard = () => {
     setCalculatedBill(calculateBill(value));
   };
 
-  // Check if user can record a new reading (30-day / one per month)
-  const canRecord = () => {
-    if (!selectedCustomer?.billing_date) return true;
-
-    const lastDate = new Date(selectedCustomer.billing_date);
-    const today = new Date();
-    const diffDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
-    return diffDays >= 30;
-  };
-
-  const nextAllowedDate = selectedCustomer?.billing_date
-    ? new Date(new Date(selectedCustomer.billing_date).setDate(new Date(selectedCustomer.billing_date).getDate() + 30))
-    : null;
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedCustomer) return;
 
-    const newReading = Number(currentReadingInput);
-    if (newReading <= 0) {
+    const cubicUsed = Number(currentReadingInput);
+    if (cubicUsed <= 0) {
       setMessage("Current reading must be greater than 0.");
       return;
     }
 
-    const payload = { cubic_used: newReading };
+    const payload = {
+      user_id: selectedCustomer.user_id,
+      name: selectedCustomer.name,
+      cubic_used: cubicUsed,
+    };
 
     try {
-      const res = await updateConsumption(selectedCustomer.id, payload);
-      const updated = res.data.data;
+      const res = await addConsumption(payload); // creates new row
+      const newRecord = res.data.data;
 
-      setCustomers(customers.map((c) => (c.id === updated.id ? updated : c)));
-      setSelectedCustomer(updated);
-      setMessage("Reading updated successfully!");
+      // Replace the old customer record with the new latest record
+      setCustomers((prev) => [
+        ...prev.filter((c) => c.user_id !== newRecord.user_id),
+        newRecord,
+      ]);
+
+      setSelectedCustomer(newRecord);
+      setMessage("New reading recorded successfully!");
       setCurrentReadingInput("");
       setCalculatedBill(0);
     } catch (err) {
-      const errMsg = err.response?.data?.message || "Failed to update reading.";
+      const errMsg = err.response?.data?.message || "Failed to record reading.";
       setMessage(errMsg);
     }
 
@@ -106,9 +112,11 @@ const MeterReaderDashboard = () => {
             <h3 className="text-lg font-semibold mb-4 text-blue-300">Customers</h3>
             <ul className="space-y-3">
               {customers.map((c) => (
-                <li key={c.id}
-                    className="p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer"
-                    onClick={() => selectCustomer(c)}>
+                <li
+                  key={c.id}
+                  className="p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer"
+                  onClick={() => selectCustomer(c)}
+                >
                   {c.name}
                 </li>
               ))}
@@ -120,13 +128,19 @@ const MeterReaderDashboard = () => {
         {selectedCustomer && (
           <div className="bg-white/10 border border-gray-700 p-6 rounded-xl relative">
             {message && (
-              <div className={`absolute top-4 right-4 px-4 py-2 rounded ${message.includes("successfully") ? "bg-green-600" : "bg-red-600"} text-white`}>
+              <div
+                className={`absolute top-4 right-4 px-4 py-2 rounded ${
+                  message.includes("successfully") ? "bg-green-600" : "bg-red-600"
+                } text-white`}
+              >
                 {message}
               </div>
             )}
 
-            <button className="mb-6 text-blue-400 underline"
-                    onClick={() => setSelectedCustomer(null)}>
+            <button
+              className="mb-6 text-blue-400 underline"
+              onClick={() => setSelectedCustomer(null)}
+            >
               ← Back to Customers
             </button>
 
@@ -134,10 +148,11 @@ const MeterReaderDashboard = () => {
             <div className="bg-gray-800 p-4 rounded-lg mb-6 border border-gray-600">
               <h3 className="text-xl font-semibold text-blue-300 mb-4">Customer Details</h3>
               <p><strong>Name:</strong> {selectedCustomer.name}</p>
-              <p><strong>Previous Bill:</strong> ₱ {selectedCustomer.previous_reading}</p>
-              <p><strong>Current Total Bill:</strong> ₱ {selectedCustomer.present_reading}</p>
+              <p><strong>Previous Reading:</strong> {selectedCustomer.previous_reading} m³</p>
+              <p><strong>Current Reading:</strong> {selectedCustomer.present_reading} m³</p>
               <p><strong>Cubic Used Last Month:</strong> {selectedCustomer.cubic_used_last_month} m³</p>
               <p><strong>Current Month Cubic Used:</strong> {selectedCustomer.cubic_used} m³</p>
+              <p><strong>Total Bill:</strong> ₱ {selectedCustomer.total_bill}</p>
             </div>
 
             {/* New Reading Form */}
@@ -145,12 +160,13 @@ const MeterReaderDashboard = () => {
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="md:col-span-2">
                 <label className="block mb-1">Current Reading (m³):</label>
-                <input type="number"
-                       value={currentReadingInput}
-                       onChange={handleInputChange}
-                       className="p-2 bg-gray-800 text-white rounded w-full"
-                       required
-                       disabled={!canRecord()} />
+                <input
+                  type="number"
+                  value={currentReadingInput}
+                  onChange={(e) => handleInputChange(e)}
+                  className="p-2 bg-gray-800 text-white rounded w-full"
+                  required
+                />
               </div>
 
               {currentReadingInput > 0 && (
@@ -159,15 +175,10 @@ const MeterReaderDashboard = () => {
                 </div>
               )}
 
-              {!canRecord() && nextAllowedDate && (
-                <div className="md:col-span-2 text-red-400 font-semibold">
-                  Next allowed recording date: {new Date(nextAllowedDate).toLocaleDateString()}
-                </div>
-              )}
-
-              <button type="submit"
-                      disabled={!canRecord()}
-                      className={`md:col-span-2 p-2 rounded text-white ${canRecord() ? "bg-blue-500 hover:bg-blue-600" : "bg-gray-600 cursor-not-allowed"}`}>
+              <button
+                type="submit"
+                className="md:col-span-2 p-2 rounded text-white bg-blue-500 hover:bg-blue-600"
+              >
                 Save Reading
               </button>
             </form>
@@ -179,4 +190,3 @@ const MeterReaderDashboard = () => {
 };
 
 export default MeterReaderDashboard;
-  
