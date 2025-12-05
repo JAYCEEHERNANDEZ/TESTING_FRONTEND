@@ -11,7 +11,7 @@ const RecordConsumption = () => {
   const [currentReadingInput, setCurrentReadingInput] = useState("");
   const [calculatedBill, setCalculatedBill] = useState(0);
   const [message, setMessage] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all"); // all / paid / unpaid
+  const [filterStatus, setFilterStatus] = useState("not-recorded"); // all / recorded / not-recorded
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const navigate = useNavigate();
@@ -21,6 +21,7 @@ const RecordConsumption = () => {
     { label: "Record Consumption", path: "/record-consumption", icon: <FaFolderOpen /> },
   ];
 
+  // -------------------- LOAD DATA --------------------
   useEffect(() => {
     loadConsumptions();
   }, []);
@@ -52,6 +53,7 @@ const RecordConsumption = () => {
     }
   };
 
+  // -------------------- CUSTOMER SELECTION --------------------
   const selectCustomer = (customer) => {
     setSelectedCustomer(customer);
     setCurrentReadingInput("");
@@ -59,6 +61,7 @@ const RecordConsumption = () => {
     setMessage("");
   };
 
+  // -------------------- BILL CALCULATION --------------------
   const calculateBill = (cubicUsed) => {
     if (cubicUsed <= 5) return 270;
     return 270 + (cubicUsed - 5) * 17;
@@ -70,6 +73,7 @@ const RecordConsumption = () => {
     setCalculatedBill(calculateBill(value));
   };
 
+  // -------------------- RECORD SUBMISSION --------------------
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedCustomer) return;
@@ -107,16 +111,33 @@ const RecordConsumption = () => {
     setTimeout(() => setMessage(""), 5000);
   };
 
-  const isPaid = (customer) =>
-    Number(customer.payment_total || 0) >= Number(customer.total_bill || 0);
+  // -------------------- FILTERING --------------------
+  const canRecord = (customer) => {
+    if (!customer?.billing_date) return true;
+    const lastDate = new Date(customer.billing_date);
+    const today = new Date();
+    return !(lastDate.getMonth() === today.getMonth() && lastDate.getFullYear() === today.getFullYear());
+  };
+
+  const nextRecordDate = (customer) => {
+    if (!customer?.billing_date) return null;
+    const lastDate = new Date(customer.billing_date);
+    const nextMonth = new Date(lastDate.getFullYear(), lastDate.getMonth() + 1, 1);
+    return nextMonth.toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
 
   const applyFilter = () => {
-    if (filterStatus === "all") {
+    if (filterStatus === "not-recorded") {
+      setFilteredCustomers(customers.filter((c) => canRecord(c)));
+    } else if (filterStatus === "recorded") {
+      setFilteredCustomers(customers.filter((c) => !canRecord(c)));
+    } else {
+      // all customers
       setFilteredCustomers(customers);
-    } else if (filterStatus === "paid") {
-      setFilteredCustomers(customers.filter(isPaid));
-    } else if (filterStatus === "unpaid") {
-      setFilteredCustomers(customers.filter((c) => !isPaid(c)));
     }
   };
 
@@ -126,6 +147,7 @@ const RecordConsumption = () => {
     navigate("/");
   };
 
+  // -------------------- RENDER --------------------
   return (
     <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
@@ -212,13 +234,13 @@ const RecordConsumption = () => {
               className="p-2 border rounded"
             >
               <option value="all">All</option>
-              <option value="paid">Paid</option>
-              <option value="unpaid">Unpaid</option>
+              <option value="not-recorded">Not Recorded</option>
+              <option value="recorded">Already Recorded</option>
             </select>
           </div>
         </div>
 
-        {/* Customer List or Selected Customer */}
+        {/* Customer List */}
         {!selectedCustomer && (
           <div className="bg-white/10 border border-gray-300 p-6 rounded-xl">
             <h3 className="text-lg font-semibold mb-4 text-blue-600">Customers</h3>
@@ -231,11 +253,9 @@ const RecordConsumption = () => {
                 >
                   <span>{c.name}</span>
                   <span
-                    className={
-                      isPaid(c) ? "text-green-600 font-semibold" : "text-red-600 font-semibold"
-                    }
+                    className={canRecord(c) ? "text-green-600 font-semibold" : "text-red-600 font-semibold"}
                   >
-                    {isPaid(c) ? "Paid" : "Unpaid"}
+                    {canRecord(c) ? "Can Record" : "Recorded"}
                   </span>
                 </li>
               ))}
@@ -243,6 +263,7 @@ const RecordConsumption = () => {
           </div>
         )}
 
+        {/* Selected Customer */}
         {selectedCustomer && (
           <div className="bg-white/10 border border-gray-300 p-6 rounded-xl relative">
             {message && (
@@ -264,58 +285,58 @@ const RecordConsumption = () => {
 
             <div className="bg-gray-100 p-4 rounded-lg mb-6 border border-gray-300">
               <h3 className="text-xl font-semibold text-blue-600 mb-4">Customer Details</h3>
-              <p>
-                <strong>Name:</strong> {selectedCustomer.name}
-              </p>
-              <p>
-                <strong>Previous Reading:</strong> {selectedCustomer.previous_reading} m³
-              </p>
-              <p>
-                <strong>Current Reading:</strong> {selectedCustomer.present_reading} m³
-              </p>
-              <p>
-                <strong>Cubic Used Last Month:</strong> {selectedCustomer.cubic_used_last_month} m³
-              </p>
-              <p>
-                <strong>Current Month Cubic Used:</strong> {selectedCustomer.cubic_used} m³
-              </p>
-              <p>
-                <strong>Total Bill:</strong> ₱ {selectedCustomer.total_bill}
-              </p>
-              <p>
-                <strong>Status:</strong>{" "}
-                <span className={isPaid(selectedCustomer) ? "text-green-600" : "text-red-600"}>
-                  {isPaid(selectedCustomer) ? "Paid" : "Unpaid"}
-                </span>
-              </p>
+              <p><strong>Name:</strong> {selectedCustomer.name}</p>
+              <p><strong>Previous Reading:</strong> {selectedCustomer.previous_reading}</p>
+              <p><strong>Current Reading:</strong> {selectedCustomer.present_reading}</p>
+              <p><strong>Cubic Used Last Month:</strong> {selectedCustomer.cubic_used_last_month} m³</p>
+              <p><strong>Current Month Cubic Used:</strong> {selectedCustomer.cubic_used} m³</p>
+              <p><strong>Total Bill:</strong> ₱ {selectedCustomer.total_bill}</p>
             </div>
 
-            <h3 className="text-lg font-semibold mb-4 text-blue-600">Enter Current Reading</h3>
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block mb-1">Current Reading (m³):</label>
-                <input
-                  type="number"
-                  value={currentReadingInput}
-                  onChange={handleInputChange}
-                  className="p-2 bg-gray-100 rounded w-full"
-                  required
-                />
+            {/* Conditional Rendering */}
+            {canRecord(selectedCustomer) ? (
+              <>
+                <h3 className="text-lg font-semibold mb-4 text-blue-600">Enter Current Reading</h3>
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block mb-1">Current Reading (m³):</label>
+                    <input
+                      type="number"
+                      value={currentReadingInput}
+                      onChange={handleInputChange}
+                      className="p-2 bg-gray-100 rounded w-full"
+                      required
+                    />
+                  </div>
+
+                  {currentReadingInput > 0 && (
+                    <div className="md:col-span-2 text-yellow-600 font-semibold">
+                      Calculated Bill: ₱ {calculatedBill}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="md:col-span-2 p-2 rounded text-white bg-blue-600 hover:bg-blue-700"
+                  >
+                    Save Reading
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="text-red-600 font-semibold">
+                Consumption for this month was already recorded on{" "}
+                <strong>
+                  {new Date(selectedCustomer.billing_date).toLocaleDateString("en-PH", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </strong>.
+                <br />
+                You can record again on <strong>{nextRecordDate(selectedCustomer)}</strong>.
               </div>
-
-              {currentReadingInput > 0 && (
-                <div className="md:col-span-2 text-yellow-600 font-semibold">
-                  Calculated Bill: ₱ {calculatedBill}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                className="md:col-span-2 p-2 rounded text-white bg-blue-600 hover:bg-blue-700"
-              >
-                Save Reading
-              </button>
-            </form>
+            )}
           </div>
         )}
       </main>

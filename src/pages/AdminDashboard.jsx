@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaTachometerAlt,
@@ -9,7 +9,11 @@ import {
   FaBell,
   FaUserCircle,
 } from "react-icons/fa";
-import { fetchConsumptions } from "../api/api.js";
+import {
+  fetchConsumptions,
+  fetchAdminNotifications,
+  markAdminNotificationRead,
+} from "../api/api.js";
 import {
   LineChart,
   Line,
@@ -23,11 +27,14 @@ import {
 const AdminDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [consumptions, setConsumptions] = useState([]);
-  const [filterMonth, setFilterMonth] = useState(""); // 1-12
-  const [filterYear, setFilterYear] = useState(""); // YYYY
+  const [filterMonth, setFilterMonth] = useState("");
+  const [filterYear, setFilterYear] = useState("");
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const navigate = useNavigate();
+  const notifRef = useRef();
 
   const navItems = [
     { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
@@ -38,7 +45,7 @@ const AdminDashboard = () => {
     { label: "Reports", path: "/manage-records", icon: <FaFileAlt /> },
   ];
 
-  // ---------------- Load Data ----------------
+  // ---------------- Load Consumptions ----------------
   useEffect(() => {
     const loadConsumptions = async () => {
       try {
@@ -51,6 +58,33 @@ const AdminDashboard = () => {
     loadConsumptions();
   }, []);
 
+  // ---------------- Load Admin Notifications + Polling ----------------
+  useEffect(() => {
+    const loadNotifications = async () => {
+      try {
+        const res = await fetchAdminNotifications();
+        setAdminNotifications(res.data?.data || []);
+      } catch (err) {
+        console.error("Error fetching admin notifications:", err);
+      }
+    };
+
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 10000); // poll every 10s
+    return () => clearInterval(interval);
+  }, []);
+
+  // ---------------- Close dropdown when clicking outside ----------------
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // ---------------- Filter Consumptions ----------------
   const filteredConsumptions = consumptions.filter((c) => {
     const date = new Date(c.billing_date || c.created_at);
@@ -61,28 +95,20 @@ const AdminDashboard = () => {
 
   // ---------------- KPIs ----------------
   const now = new Date();
-  const last12Months = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    last12Months.push(d);
-  }
+  const last12Months = Array.from({ length: 12 }, (_, i) =>
+    new Date(now.getFullYear(), now.getMonth() - i, 1)
+  );
 
   const kpiConsumptions = last12Months.flatMap((monthDate) =>
     consumptions.filter((c) => {
       const date = new Date(c.billing_date || c.created_at);
-      return (
-        date.getMonth() === monthDate.getMonth() &&
-        date.getFullYear() === monthDate.getFullYear()
-      );
+      return date.getMonth() === monthDate.getMonth() && date.getFullYear() === monthDate.getFullYear();
     })
   );
 
   const totalUsers = new Set(kpiConsumptions.map((c) => c.user_id)).size;
   const totalBill = kpiConsumptions.reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
-  const totalBalance = kpiConsumptions.reduce(
-    (sum, c) => sum + Number(c.remaining_balance || 0),
-    0
-  );
+  const totalBalance = kpiConsumptions.reduce((sum, c) => sum + Number(c.remaining_balance || 0), 0);
   const totalIncome = kpiConsumptions.reduce(
     (sum, c) => sum + Number(c.payment_1 || 0) + Number(c.payment_2 || 0),
     0
@@ -91,24 +117,26 @@ const AdminDashboard = () => {
     const created = new Date(c.created_at);
     return last12Months.some(
       (monthDate) =>
-        monthDate.getMonth() === created.getMonth() &&
-        monthDate.getFullYear() === created.getFullYear()
+        monthDate.getMonth() === created.getMonth() && monthDate.getFullYear() === created.getFullYear()
     );
   }).length;
 
   // ---------------- Chart Data ----------------
-  const chartData = last12Months.map((monthDate) => {
-    const monthSum = consumptions
-      .filter((c) => {
-        const date = new Date(c.billing_date || c.created_at);
-        return date.getMonth() === monthDate.getMonth() && date.getFullYear() === monthDate.getFullYear();
-      })
-      .reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
-    return {
-      month: monthDate.toLocaleString("default", { month: "short", year: "numeric" }),
-      total: monthSum,
-    };
-  });
+  const chartData = last12Months
+    .slice()
+    .reverse()
+    .map((monthDate) => {
+      const monthSum = consumptions
+        .filter((c) => {
+          const date = new Date(c.billing_date || c.created_at);
+          return date.getMonth() === monthDate.getMonth() && date.getFullYear() === monthDate.getFullYear();
+        })
+        .reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
+      return {
+        month: monthDate.toLocaleString("default", { month: "short", year: "numeric" }),
+        total: monthSum,
+      };
+    });
 
   const years = Array.from(
     new Set(consumptions.map((c) => new Date(c.billing_date || c.created_at).getFullYear()))
@@ -120,7 +148,18 @@ const AdminDashboard = () => {
     navigate("/");
   };
 
-  // ---------------- Render ----------------
+  // ---------------- Mark notification as read ----------------
+  const handleReadNotification = async (notifId) => {
+    try {
+      await markAdminNotificationRead(notifId);
+      setAdminNotifications((prev) =>
+        prev.map((n) => (n.id === notifId ? { ...n, is_read: 1 } : n))
+      );
+    } catch (err) {
+      console.error("Error marking notification as read:", err);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
@@ -190,8 +229,45 @@ const AdminDashboard = () => {
       {/* Main */}
       <main className="flex-1 p-8">
         {/* Header */}
-        <div className="flex justify-between items-center bg-blue-600 text-white py-2 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
+        <div className="flex justify-between items-center bg-white text-blue-600 py-2 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
           <span className="text-xl font-bold">Admin Dashboard</span>
+
+          {/* Notifications */}
+          <div className="relative" ref={notifRef}>
+            <button
+              onClick={() => setNotifOpen(!notifOpen)}
+              className="bg-blue-500 hover:bg-blue-400 text-white p-2 rounded-full relative"
+            >
+              🔔
+              {adminNotifications.filter((n) => Number(n.is_read) === 0).length > 0 && (
+                <span className="absolute top-0 right-0 bg-red-500 rounded-full w-4 h-4 text-xs text-white flex items-center justify-center">
+                  {adminNotifications.filter((n) => Number(n.is_read) === 0).length}
+                </span>
+              )}
+            </button>
+
+            {notifOpen && (
+              <div className="absolute right-0 mt-2 w-96 bg-gray-50 border border-gray-300 rounded shadow-lg z-50 overflow-y-auto max-h-[28rem]">
+                {adminNotifications.length === 0 ? (
+                  <p className="p-4 text-gray-600 text-center">No notifications</p>
+                ) : (
+                  adminNotifications.map((notif) => (
+                    <div
+                      key={notif.id}
+                      className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${
+                        Number(notif.is_read) === 0 ? "bg-blue-50" : ""
+                      }`}
+                      onClick={() => handleReadNotification(notif.id)}
+                    >
+                      <p className="font-semibold text-sm text-gray-800">{notif.title}</p>
+                      <p className="text-xs text-gray-600">{notif.message}</p>
+                      <small className="text-gray-500 text-xs">{new Date(notif.created_at).toLocaleString()}</small>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Filters */}

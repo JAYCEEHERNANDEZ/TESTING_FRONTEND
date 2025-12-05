@@ -1,5 +1,5 @@
 // ManageRecords.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaTachometerAlt,
@@ -9,14 +9,18 @@ import {
   FaUsers,
   FaUserCog,
   FaFileAlt,
-  FaPaperPlane
+  FaPaperPlane,
+  FaReceipt
 } from "react-icons/fa";
 import {
   fetchAllUsersAdmin,
   fetchUserPaymentProofs,
   adminRecordPayment,
   fetchOverdueUsers,
-  sendNotificationPerUser
+  sendNotificationPerUser,
+  fetchReceipt,
+  sendDeactNotice,
+  fetchAdminNotifications
 } from "../api/api.js";
 
 const ManageRecords = () => {
@@ -27,18 +31,18 @@ const ManageRecords = () => {
   const [loading, setLoading] = useState(false);
   const [overdueUsers, setOverdueUsers] = useState([]);
   const [loadingOverdue, setLoadingOverdue] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [userFilter, setUserFilter] = useState("all"); // all | pending | approved
 
-  // Notice modal state
   const [showNoticeModal, setShowNoticeModal] = useState(false);
   const [noticeUserId, setNoticeUserId] = useState(null);
   const [noticeTitle, setNoticeTitle] = useState("");
   const [noticeMessage, setNoticeMessage] = useState("");
   const [sendingNotice, setSendingNotice] = useState(false);
-
-  // Inline notification messages
   const [notificationMsg, setNotificationMsg] = useState({ type: "", text: "" });
 
   const navigate = useNavigate();
+  const userRefs = useRef({});
 
   const navItems = [
     { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
@@ -49,7 +53,7 @@ const ManageRecords = () => {
     { label: "Reports", path: "/manage-records", icon: <FaFileAlt /> },
   ];
 
-  // ------------------- Fetch Users -------------------
+  // Fetch all users
   useEffect(() => {
     const loadUsers = async () => {
       setLoading(true);
@@ -66,9 +70,9 @@ const ManageRecords = () => {
     loadUsers();
   }, []);
 
-  // ------------------- Fetch Overdue Users -------------------
+  // Fetch overdue users
   useEffect(() => {
-    const loadOverdueUsers = async () => {
+    const loadOverdue = async () => {
       setLoadingOverdue(true);
       try {
         const res = await fetchOverdueUsers();
@@ -80,11 +84,24 @@ const ManageRecords = () => {
         setLoadingOverdue(false);
       }
     };
-    loadOverdueUsers();
+    loadOverdue();
   }, []);
 
-  // ------------------- Expand User Records -------------------
-  const handleExpandUser = async (userId) => {
+  // Fetch admin notifications
+  useEffect(() => {
+    const loadNotifications = async () => {
+      try {
+        const res = await fetchAdminNotifications();
+        setNotifications(res.data.data || []);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+    loadNotifications();
+  }, []);
+
+  // Expand user to show records
+  const expandUser = async (userId) => {
     if (expandedUserId === userId) {
       setExpandedUserId(null);
       return;
@@ -100,30 +117,34 @@ const ManageRecords = () => {
       }
     }
     setExpandedUserId(userId);
+    setTimeout(() => {
+      userRefs.current[userId]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 300);
   };
 
-  // ------------------- Logout -------------------
   const handleLogout = () => {
     localStorage.removeItem("admin_id");
     localStorage.removeItem("admin_name");
     navigate("/");
   };
 
-  // ------------------- Record Payment -------------------
   const handleSubmitPayment = async (userId, paymentId, amount) => {
     if (!amount || Number(amount) <= 0) return;
     try {
       await adminRecordPayment(paymentId, Number(amount));
       setNotificationMsg({ type: "success", text: "Payment recorded successfully." });
+
+      // Remove payment notifications for this user
+      setNotifications(prev => prev.filter(n => !(n.title.includes("Payment") && n.user_id === userId)));
+
       const res = await fetchUserPaymentProofs(userId);
       setRecordsByUser(prev => ({ ...prev, [userId]: res.data.data || [] }));
     } catch (err) {
-      console.error("Error recording payment:", err);
+      console.error(err);
       setNotificationMsg({ type: "error", text: "Failed to record payment." });
     }
   };
 
-  // ------------------- Send Personal Notification -------------------
   const openNoticeModal = (userId) => {
     setNoticeUserId(userId);
     setNoticeTitle("");
@@ -147,14 +168,46 @@ const ManageRecords = () => {
       setShowNoticeModal(false);
       setNotificationMsg({ type: "success", text: "Notification sent successfully." });
     } catch (err) {
-      console.error("Error sending notification:", err);
-      setNotificationMsg({ type: "error", text: err.response?.data?.error || "Failed to send notification." });
+      console.error(err);
+      setNotificationMsg({ type: "error", text: "Failed to send notification." });
     } finally {
       setSendingNotice(false);
     }
   };
 
-  // ------------------- Payment Status -------------------
+  const handleSendDeactNotice = async (userId) => {
+    setSendingNotice(true);
+    try {
+      await sendDeactNotice({ user_id: userId });
+      setNotificationMsg({ type: "success", text: "Deactivation notice sent successfully!" });
+      setOverdueUsers(prev => prev.map(u => u.user_id === userId ? { ...u, notice_sent: true } : u));
+    } catch (err) {
+      console.error(err);
+      setNotificationMsg({ type: "error", text: "Failed to send notice." });
+    } finally {
+      setSendingNotice(false);
+    }
+  };
+
+  const handleGenerateReceipt = async (userId, consumptionId) => {
+    try {
+      const res = await fetchReceipt(consumptionId);
+      const receiptData = res.data;
+
+      await sendNotificationPerUser({
+        user_id: userId,
+        title: `Official Receipt: ${receiptData.receipt_number}`,
+        message: `Hello ${receiptData.name}, your payment of ₱${receiptData.total_paid} for ${new Date(receiptData.billing_date).toLocaleDateString()} has been confirmed. Receipt Number: ${receiptData.receipt_number}`,
+        type: "receipt"
+      });
+
+      setNotificationMsg({ type: "success", text: `Receipt generated and sent to ${receiptData.name}` });
+    } catch (err) {
+      console.error(err);
+      setNotificationMsg({ type: "error", text: "Failed to generate receipt." });
+    }
+  };
+
   const getStatus = (record) => {
     const remaining = Number(record.remaining_balance || 0);
     const total = Number(record.total_bill || 0);
@@ -175,9 +228,18 @@ const ManageRecords = () => {
 
   const activeUsers = users.filter(u => !u.is_deactivated);
 
+  // Filtered users for the filter buttons
+  const filteredUsers = activeUsers.filter(user => {
+    const hasPendingPayment = notifications.some(
+      n => n.user_id === user.id && !n.is_read && n.title.includes("Payment")
+    );
+    if (userFilter === "pending") return hasPendingPayment;
+    if (userFilter === "approved") return !hasPendingPayment;
+    return true;
+  });
+
   return (
     <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
-
       {/* Sidebar */}
       <aside className={`bg-gray-950 text-white flex flex-col transition-all duration-300 shadow-md m-2 rounded-2xl ${sidebarOpen ? "w-64" : "w-20 overflow-hidden"}`}>
         <div className="flex items-center justify-between mt-8 mb-8 px-4">
@@ -213,7 +275,6 @@ const ManageRecords = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col gap-4 p-8">
-        {/* Inline Notification Message */}
         {notificationMsg.text && (
           <div className={`p-3 rounded mb-4 font-medium ${notificationMsg.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
             {notificationMsg.text}
@@ -221,87 +282,113 @@ const ManageRecords = () => {
         )}
 
         <div className="flex gap-6">
-
-          {/* Active Users Column */}
+          {/* Active Users */}
           <div className="flex-1 flex flex-col gap-4">
-            <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
-              All Users
+            <div className="flex justify-between items-center bg-blue-600 text-white py-4 px-5 rounded-xl shadow mb-2 text-xl font-semibold">
+              Users
             </div>
 
-            {loading ? <p>Loading users...</p> : activeUsers.length === 0 ? <p>No active users found.</p> : (
-              activeUsers.map(user => (
-                <div key={user.id} className="bg-white p-4 rounded-lg shadow hover:shadow-lg transition">
-                  <div className="flex items-center justify-between">
-                    <button
-                      className="text-lg font-semibold text-blue-600 hover:text-blue-500"
-                      onClick={() => handleExpandUser(user.id)}
-                    >
-                      {user.name}
-                    </button>
-                    <button
-                      onClick={() => openNoticeModal(user.id)}
-                      className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-1 rounded shadow hover:shadow-lg flex items-center gap-2"
-                    >
-                      <FaPaperPlane /> Send Notice
-                    </button>
-                  </div>
+            {/* Filter Buttons */}
+            <div className="flex gap-2 mb-4">
+              <button
+                className={`px-3 py-1 rounded ${userFilter === "all" ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-800"}`}
+                onClick={() => setUserFilter("all")}
+              >
+                All Users
+              </button>
+              <button
+                className={`px-3 py-1 rounded ${userFilter === "pending" ? "bg-yellow-400 text-white" : "bg-gray-200 text-gray-800"}`}
+                onClick={() => setUserFilter("pending")}
+              >
+                Pending Approval
+              </button>
+              <button
+                className={`px-3 py-1 rounded ${userFilter === "approved" ? "bg-green-600 text-white" : "bg-gray-200 text-gray-800"}`}
+                onClick={() => setUserFilter("approved")}
+              >
+                Approved
+              </button>
+            </div>
 
-                  {expandedUserId === user.id && (
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      <div className="col-span-2 flex flex-col gap-3">
-                        {recordsByUser[user.id]?.length > 0 ? recordsByUser[user.id].map(r => (
-                          <div key={r.id} className="p-4 bg-gray-50 rounded-lg flex flex-col gap-2 shadow relative hover:shadow-md transition">
-                            <span className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(getStatus(r))}`}>
-                              {getStatus(r)}
-                            </span>
-                            <p><strong>Billing Month:</strong> {new Date(r.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
-                            <p><strong>Previous Reading:</strong> {r.previous_reading}</p>
-                            <p><strong>Current Reading:</strong> {r.present_reading}</p>
-                            <p><strong>Consumption:</strong> {r.cubic_used} m³</p>
-                            <p><strong>Total Bill:</strong> ₱{r.total_bill}</p>
-                            <p><strong>Payment 1:</strong> ₱{r.payment_1}</p>
-                            <p><strong>Payment 2:</strong> ₱{r.payment_2}</p>
-                            <p><strong>Remaining Balance:</strong> ₱{r.remaining_balance}</p>
-                            <p><strong>Reference Code:</strong> {r.reference_code || "N/A"}</p>
+            {loading ? <p>Loading users...</p> : filteredUsers.length === 0 ? <p>No users found.</p> : (
+              filteredUsers.map(user => {
+                const hasPendingPayment = notifications.some(
+                  n => n.user_id === user.id && !n.is_read && n.title.includes("Payment")
+                );
 
-                            {getStatus(r) !== "Paid" && (
-                              <div className="flex gap-2 mt-2">
-                                <input
-                                  type="number"
-                                  className="p-2 border rounded w-1/2 focus:ring-1 focus:ring-blue-500"
-                                  placeholder="Enter payment amount"
-                                  onChange={e => r.adminPayment = e.target.value}
-                                />
-                                <button
-                                  className="bg-green-600 p-2 rounded hover:bg-green-700 text-white transition"
-                                  onClick={() => handleSubmitPayment(user.id, r.id, r.adminPayment)}
-                                >
-                                  Record Payment
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )) : <p>No payment records found.</p>}
-                      </div>
+                return (
+                  <div
+                    key={user.id}
+                    ref={el => userRefs.current[user.id] = el}
+                    className={`bg-white p-4 rounded-lg shadow hover:shadow-lg transition ${expandedUserId === user.id ? "border-2 border-blue-400" : ""} ${hasPendingPayment ? "border-2 border-yellow-400" : ""}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <button className="text-lg font-semibold text-blue-600 hover:text-blue-500" onClick={() => expandUser(user.id)}>
+                        {user.name}
+                      </button>
 
-                      <div className="col-span-1 p-3 bg-white rounded-lg shadow flex flex-col items-center">
-                        <h2 className="text-lg font-semibold mb-2 text-center">Payment Proof</h2>
-                        {recordsByUser[user.id]?.[0]?.proof_url ? (
-                          <img
-                            src={`http://localhost:5000${recordsByUser[user.id][0].proof_url}`}
-                            alt="Payment Proof"
-                            className="w-60 h-70 rounded-lg shadow object-contain"
-                          />
-                        ) : <p className="text-gray-500 italic">No proof uploaded.</p>}
-                      </div>
+                      {hasPendingPayment && (
+                        <span className="px-2 py-1 rounded-full text-xs font-bold bg-yellow-200 text-yellow-800">
+                          Pending Approval
+                        </span>
+                      )}
+
+                      <button onClick={() => openNoticeModal(user.id)} className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-1 rounded shadow hover:shadow-lg flex items-center gap-2">
+                        <FaPaperPlane /> Send Notice
+                      </button>
                     </div>
-                  )}
-                </div>
-              ))
+
+                    {expandedUserId === user.id && (
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        {/* Records */}
+                        <div className="col-span-2 flex flex-col gap-3">
+                          {recordsByUser[user.id]?.length > 0 ? recordsByUser[user.id].map(r => (
+                            <div key={r.id} className="p-4 bg-gray-50 rounded-lg flex flex-col gap-2 shadow relative hover:shadow-md transition">
+                              <span className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(getStatus(r))}`}>
+                                {getStatus(r)}
+                              </span>
+                              <p><strong>Billing Month:</strong> {new Date(r.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+                              <p><strong>Previous Reading:</strong> {r.previous_reading}</p>
+                              <p><strong>Current Reading:</strong> {r.present_reading}</p>
+                              <p><strong>Consumption:</strong> {r.cubic_used} m³</p>
+                              <p><strong>Total Bill:</strong> ₱{r.total_bill}</p>
+                              <p><strong>Payment 1:</strong> ₱{r.payment_1}</p>
+                              <p><strong>Payment 2:</strong> ₱{r.payment_2}</p>
+                              <p><strong>Remaining Balance:</strong> ₱{r.remaining_balance}</p>
+                              <p><strong>Reference Code:</strong> {r.reference_code || "N/A"}</p>
+
+                              {getStatus(r) !== "Paid" && (
+                                <div className="flex gap-2 mt-2">
+                                  <input type="number" className="p-2 border rounded w-1/2 focus:ring-1 focus:ring-blue-500" placeholder="Enter payment amount" onChange={e => r.adminPayment = e.target.value} />
+                                  <button className="bg-green-600 p-2 rounded hover:bg-green-700 text-white transition" onClick={() => handleSubmitPayment(user.id, r.id, r.adminPayment)}>Record Payment</button>
+                                </div>
+                              )}
+
+                              {getStatus(r) !== "Unpaid" && (
+                                <button className="mt-2 bg-yellow-600 text-white px-4 py-2 rounded hover:bg-yellow-700 flex items-center gap-2" onClick={() => handleGenerateReceipt(user.id, r.id)}>
+                                  <FaReceipt /> Generate Receipt
+                                </button>
+                              )}
+                            </div>
+                          )) : <p>No payment records found.</p>}
+                        </div>
+
+                        {/* Payment Proof */}
+                        <div className="col-span-1 p-3 bg-white rounded-lg shadow flex flex-col items-center">
+                          <h2 className="text-lg font-semibold mb-2 text-center">Payment Proof</h2>
+                          {recordsByUser[user.id]?.[0]?.proof_url ? (
+                            <img src={`http://localhost:5000${recordsByUser[user.id][0].proof_url}`} alt="Payment Proof" className="w-60 h-70 rounded-lg shadow object-contain" />
+                          ) : <p className="text-gray-500 italic">No proof uploaded.</p>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
 
-          {/* Overdue Users Column */}
+          {/* Overdue Users */}
           <div className="flex-1 flex flex-col gap-4">
             <div className="flex justify-between items-center bg-red-600 text-white py-4 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
               Overdue / Notice Users
@@ -315,15 +402,10 @@ const ManageRecords = () => {
                     <p>Remaining Balance: ₱{user.remaining_balance}</p>
                     <p>Billing Date: {new Date(user.billing_date).toLocaleDateString()}</p>
                     <p>Due Date: {new Date(user.due_date).toLocaleDateString()}</p>
-                    <p className="text-gray-600 italic">
-                      {user.notice_sent ? "Notice already sent" : "Notice pending"}
-                    </p>
+                    <p className="text-gray-600 italic">{user.notice_sent ? "Notice already sent" : "Notice pending"}</p>
                   </div>
                   {!user.notice_sent && (
-                    <button
-                      onClick={() => openNoticeModal(user.user_id)}
-                      className="bg-gradient-to-r from-red-500 to-red-700 text-white px-4 py-2 rounded shadow hover:shadow-lg flex items-center gap-2"
-                    >
+                    <button onClick={() => handleSendDeactNotice(user.user_id)} className="bg-gradient-to-r from-red-500 to-red-700 text-white px-4 py-2 rounded shadow hover:shadow-lg flex items-center gap-2">
                       <FaPaperPlane /> Send Notice
                     </button>
                   )}
@@ -333,43 +415,22 @@ const ManageRecords = () => {
           </div>
         </div>
 
-        {/* Notice Modal */}
+        {/* Personal Notice Modal */}
         {showNoticeModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center bg-transparent justify-center z-50">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl p-6 w-96 shadow-lg animate-slide-in">
               <h2 className="text-xl font-bold mb-4 text-blue-700 border-b pb-2">Send Personal Notification</h2>
 
               <label className="block mb-2 text-sm font-medium text-gray-700">Title</label>
-              <input
-                type="text"
-                placeholder="Enter notification title"
-                value={noticeTitle}
-                onChange={(e) => setNoticeTitle(e.target.value)}
-                className="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500 transition"
-              />
+              <input type="text" placeholder="Enter notification title" value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)} className="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500" />
 
               <label className="block mb-2 text-sm font-medium text-gray-700">Message</label>
-              <textarea
-                placeholder="Write your message here"
-                value={noticeMessage}
-                onChange={(e) => setNoticeMessage(e.target.value)}
-                className="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500 transition h-28 resize-none"
-              />
+              <textarea placeholder="Enter notification message" value={noticeMessage} onChange={(e) => setNoticeMessage(e.target.value)} className="w-full p-3 border rounded mb-4 focus:ring-2 focus:ring-blue-500" />
 
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowNoticeModal(false)}
-                  className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 transition"
-                  disabled={sendingNotice}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSendPersonalNotice}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2 transition"
-                  disabled={sendingNotice}
-                >
-                  {sendingNotice ? "Sending..." : "Send"} <FaPaperPlane />
+              <div className="flex justify-end gap-2">
+                <button className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition" onClick={() => setShowNoticeModal(false)}>Cancel</button>
+                <button className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition" onClick={handleSendPersonalNotice} disabled={sendingNotice}>
+                  {sendingNotice ? "Sending..." : "Send Notice"}
                 </button>
               </div>
             </div>

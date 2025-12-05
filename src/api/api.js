@@ -65,16 +65,16 @@ export const deleteConsumption = (id) =>
 /* ---------------------------------------------
    BILLING (USER + ADMIN)
 --------------------------------------------- */
-export const billingAPI = axios.create({
-  baseURL: "http://localhost:5000/billing",
-  headers: { "Content-Type": "application/json" },
-});
+// export const billingAPI = axios.create({
+//   baseURL: "http://localhost:5000/billing",
+//   headers: { "Content-Type": "application/json" },
+// });
 
-// Fetch individual user's billing records
-export const fetchUserBilling = (userId) => billingAPI.get(`/user/${userId}`);
+// // Fetch individual user's billing records
+// export const fetchUserBilling = (userId) => billingAPI.get(`/user/${userId}`);
 
-// Fetch all billing records (Admin)
-export const fetchAllBilling = () => billingAPI.get(`/all`);
+// // Fetch all billing records (Admin)
+// export const fetchAllBilling = () => billingAPI.get(`/all`);
 
 /* ---------------------------------------------
    MONTHLY INCOME
@@ -115,12 +115,8 @@ export const submitPayAll = (billIds = [], amount, reference_code) =>
   });
 
 // Submit reference code
-export const submitReferenceCodeAPI = ({ user_id, bill_id, reference_code }) =>
-  paymentAPI.post("/submit-reference", {
-    user_id,
-    bill_id,
-    reference_code,
-  });
+export const submitReferenceCodeAPI = ({ user_id, reference_code }) =>
+  axios.post("http://localhost:5000/payment/submit-reference", { user_id, reference_code });
 
   export const uploadPaymentProof = (formData) =>
   axios.post("http://localhost:5000/payment/upload-proof", formData, {
@@ -198,7 +194,28 @@ export const fetchUserNotificationsPerUser = (userId) =>
 // Mark notification as read
 export const readNotificationPerUser = (notifId) =>
   notificationAPI.put(`/read/${notifId}`);
-// -----------------------------
+
+
+// Notify admin (used when user submits reference code or proof)
+export const notifyAdmin = (title, message) =>
+  notificationAPI.post("/send", { user_id: null, title, message });
+
+// Mark admin notification as read
+export const markAdminNotificationAsRead = (notifId) =>
+  notificationAPI.put(`/read/${notifId}`);
+
+export const adminNotificationAPI = axios.create({
+  baseURL: "http://localhost:5000/notifications/admin",
+  headers: { "Content-Type": "application/json" },
+});
+
+// Fetch all admin notifications
+export const fetchAdminNotifications = () =>
+  adminNotificationAPI.get("/all");
+
+// Mark an admin notification as read
+export const markAdminNotificationRead = (id) =>
+  adminNotificationAPI.put(`/read/${id}`);
 // DEACTIVATION NOTICES
 // -----------------------------
 export const noticeAPI = axios.create({
@@ -217,3 +234,12 @@ export const fetchUserNotices = (userId) => noticeAPI.get(`/user/${userId}`);
 
 // USER – Mark as read
 export const markNoticeAsRead = (id) => noticeAPI.put(`/read/${id}`);
+
+
+export const receiptAPI = axios.create({
+  baseURL: "http://localhost:5000/receipt",
+  headers: { "Content-Type": "application/json" },
+});
+
+// Fetch a receipt by consumption ID
+export const fetchReceipt = (consumptionId) => receiptAPI.get(`/${consumptionId}`);

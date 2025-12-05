@@ -1,12 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  fetchUsers,
-  registerUser,
-  deactivateUser,
-  reactivateUser,
-} from "../api/api.js";
-import {
   FaTachometerAlt,
   FaBell,
   FaFolderOpen,
@@ -15,6 +9,12 @@ import {
   FaFileAlt,
   FaUserCircle,
 } from "react-icons/fa";
+import {
+  fetchUsers,
+  registerUser,
+  deactivateUser,
+  reactivateUser,
+} from "../api/api.js";
 
 // Dialog component
 const Dialog = ({ type, message, onClose }) => {
@@ -27,7 +27,7 @@ const Dialog = ({ type, message, onClose }) => {
         <p className={`text-lg font-semibold ${textColor} mb-4`}>{message}</p>
         <button
           onClick={onClose}
-          className={`px-4 py-2 rounded bg-white hover:opacity-90 shadow`}
+          className="px-4 py-2 rounded bg-white hover:opacity-90 shadow"
         >
           OK
         </button>
@@ -42,19 +42,17 @@ const ManageCustomers = () => {
   const [formData, setFormData] = useState({ name: "", username: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-
-  // Dialog state
   const [dialog, setDialog] = useState({ show: false, type: "success", message: "" });
 
   const navigate = useNavigate();
 
   const navItems = [
-      { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
-      { label: "User Payments", path: "/manage-records", icon: <FaFolderOpen /> },
-      { label: "Notifications Center", path: "/notification-center", icon: <FaBell /> },
-      { label: "Profiles", path: "/admin-profiles", icon: <FaUserCog /> },
-      { label: "Manage Customers", path: "/manage-customers", icon: <FaUsers /> },
-      { label: "Reports", path: "/manage-records", icon: <FaFileAlt /> },
+    { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
+    { label: "User Payments", path: "/manage-records", icon: <FaFolderOpen /> },
+    { label: "Notifications Center", path: "/notification-center", icon: <FaBell /> },
+    { label: "Profiles", path: "/admin-profiles", icon: <FaUserCog /> },
+    { label: "Manage Customers", path: "/manage-customers", icon: <FaUsers /> },
+    { label: "Reports", path: "/manage-records", icon: <FaFileAlt /> },
   ];
 
   useEffect(() => {
@@ -73,9 +71,7 @@ const ManageCustomers = () => {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const showDialog = (type, message) => {
-    setDialog({ show: true, type, message });
-  };
+  const showDialog = (type, message) => setDialog({ show: true, type, message });
 
   const handleAddCustomer = async () => {
     const { name, username, password } = formData;
@@ -119,21 +115,28 @@ const ManageCustomers = () => {
   const activeCustomers = customers.filter((c) => c.is_active).length;
 
   return (
-    <div className="flex min-h-screen bg-gray-100 text-gray-800">
+    <div className="flex min-h-screen bg-gray-100 text-gray-800 font-sans">
       {/* Sidebar */}
       <aside
-        className={`bg-gray-950 text-white flex flex-col m-2 rounded-2xl shadow-md transition-all ${
+        className={`bg-gray-950 text-white flex flex-col m-2 rounded-2xl shadow-md transition-all duration-300 ${
           sidebarOpen ? "w-64" : "w-20 overflow-hidden"
         }`}
       >
         <div className="flex items-center justify-between mt-8 mb-8 px-4">
-          {sidebarOpen && <h1 className="text-2xl font-bold text-blue-600">💧 SWS Admin</h1>}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="text-2xl hover:text-blue-400"
-          >
-            ☰
-          </button>
+          {sidebarOpen ? (
+            <div className="flex justify-between w-full items-center">
+              <h1 className="text-2xl font-bold text-blue-600 cursor-pointer" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                💧 SWS
+              </h1>
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-2xl text-white hover:text-blue-400">
+                ☰
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-center w-full cursor-pointer" onClick={() => setSidebarOpen(true)}>
+              <h1 className="text-2xl font-bold text-blue-600">💧</h1>
+            </div>
+          )}
         </div>
 
         <nav className="flex flex-col gap-3 mt-4">
@@ -153,11 +156,7 @@ const ManageCustomers = () => {
 
         {/* Sidebar Footer */}
         <div className="mt-auto mb-4 py-2 px-2 text-center flex flex-col items-center">
-          {sidebarOpen && (
-            <span className="text-lg font-semibold text-blue-500 uppercase mb-2">
-              SUCOL WATER SYSTEM
-            </span>
-          )}
+          {sidebarOpen && <span className="text-lg font-semibold text-blue-500 uppercase mb-2">SUCOL WATER SYSTEM</span>}
           <button
             onClick={() => setShowLogoutModal(true)}
             className="flex items-center gap-2 text-red-500 hover:text-red-400 px-2 py-1 rounded"
@@ -247,10 +246,7 @@ const ManageCustomers = () => {
             </thead>
             <tbody>
               {customers.map((user) => (
-                <tr
-                  key={user.id}
-                  className="border-b hover:bg-gray-50 transition"
-                >
+                <tr key={user.id} className="border-b hover:bg-gray-50 transition">
                   <td className="p-3">{user.name}</td>
                   <td className="p-3">{user.username}</td>
                   <td className={`p-3 font-semibold ${user.is_active ? "text-green-600" : "text-red-600"}`}>
