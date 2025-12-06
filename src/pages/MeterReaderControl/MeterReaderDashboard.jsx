@@ -1,18 +1,21 @@
-// AdminDashboard.jsx
+// MeterReaderDashboard.jsx
 import React, { useState, useEffect } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
-import { fetchConsumptions } from "../../api/api.js";
+import { fetchConsumptions, fetchUsers } from "../../api/api.js";
 import MeterReaderLayout from "./MeterReaderLayout.jsx";
 
 const MeterReaderDashboard = () => {
   const [consumptions, setConsumptions] = useState([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [filterMonth, setFilterMonth] = useState("");
   const [filterYear, setFilterYear] = useState("");
 
   useEffect(() => {
     loadConsumptions();
+    loadTotalUsers();
   }, []);
 
+  // -------------------- Load consumptions --------------------
   const loadConsumptions = async () => {
     try {
       const res = await fetchConsumptions();
@@ -22,21 +25,30 @@ const MeterReaderDashboard = () => {
     }
   };
 
+  // -------------------- Load total users --------------------
+  const loadTotalUsers = async () => {
+    try {
+      const res = await fetchUsers();
+      setTotalUsers(res.data?.length || 0);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+    }
+  };
+
+  // -------------------- Filter and Year List --------------------
   const years = Array.from(new Set(consumptions.map(c => new Date(c.billing_date || c.created_at).getFullYear())))
     .sort((a, b) => b - a);
 
-  // Filtered consumptions
   const filteredConsumptions = consumptions.filter(c => {
     const date = new Date(c.billing_date || c.created_at);
     return (!filterYear || date.getFullYear() === Number(filterYear)) &&
            (!filterMonth || date.getMonth() + 1 === Number(filterMonth));
   });
 
-  // KPI calculations
-  const totalUsers = filteredConsumptions.length;
+  // -------------------- KPI Calculations --------------------
   const totalBill = filteredConsumptions.reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
   const totalBalance = filteredConsumptions.reduce((sum, c) => sum + Number(c.remaining_balance || 0), 0);
-  const totalIncome = filteredConsumptions.reduce((sum, c) => sum + Number(c.payment_1 || 0) + Number(c.payment_2 || 0), 0);
+  const totalIncome = filteredConsumptions.reduce((sum, c) => sum + Number(c.payment_total || 0), 0);
   const totalCubicUsed = filteredConsumptions.reduce((sum, c) => sum + Number(c.cubic_used || 0), 0);
   const newUsers = filteredConsumptions.filter(c => {
     const created = new Date(c.created_at);
@@ -44,7 +56,7 @@ const MeterReaderDashboard = () => {
            (!filterMonth || created.getMonth() + 1 === Number(filterMonth));
   }).length;
 
-  // Prepare chart data per month
+  // -------------------- Chart Data --------------------
   const chartDataMap = {};
   filteredConsumptions.forEach(c => {
     if (!c.billing_date) return;
@@ -63,12 +75,11 @@ const MeterReaderDashboard = () => {
     return new Date(`${aMonth} 1, ${aYear}`) - new Date(`${bMonth} 1, ${bYear}`);
   });
 
-  // Current filter label
   const filterLabel = `${filterMonth ? new Date(0, filterMonth - 1).toLocaleString("default", { month: "short" }) : "All Months"} / ${filterYear || "All Years"}`;
 
   return (
     <MeterReaderLayout>
-      {/* Filters */}
+      {/* -------------------- Filters -------------------- */}
       <div className="flex gap-4 mb-6">
         <select value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="p-2 rounded shadow-inner">
           <option value="">All Months</option>
@@ -85,7 +96,7 @@ const MeterReaderDashboard = () => {
         </select>
       </div>
 
-      {/* KPI Cards */}
+      {/* -------------------- KPI Cards -------------------- */}
       <div className="grid grid-cols-1 sm:grid-cols-6 gap-6 mt-2">
         {[
           { label: "Total Users", value: totalUsers, color: "text-blue-600" },
@@ -98,7 +109,6 @@ const MeterReaderDashboard = () => {
           <div key={idx} className="bg-white p-6 rounded-xl shadow-md flex flex-col justify-between">
             <p className={`text-3xl font-bold ${kpi.color}`}>{kpi.value}</p>
             <p className="text-gray-600 mt-1 text-sm">{kpi.label}</p>
-            {/* Indicator for filter */}
             {(filterMonth || filterYear) && (
               <span className="text-gray-400 text-xs mt-1">{filterLabel}</span>
             )}
@@ -106,9 +116,9 @@ const MeterReaderDashboard = () => {
         ))}
       </div>
 
-      {/* Side-by-Side Charts */}
+      {/* -------------------- Side-by-Side Charts -------------------- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        {/* Left: Cubic Used */}
+        {/* Cubic Meters Used */}
         <div className="bg-white p-6 rounded-xl shadow-md">
           <h2 className="text-lg font-semibold mb-4">Cubic Meters Used</h2>
           <ResponsiveContainer width="100%" height={300}>
@@ -122,7 +132,7 @@ const MeterReaderDashboard = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Right: Total Income */}
+        {/* Total Income */}
         <div className="bg-white p-6 rounded-xl shadow-md">
           <h2 className="text-lg font-semibold mb-4">Total Income (₱)</h2>
           <ResponsiveContainer width="100%" height={300}>

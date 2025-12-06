@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from "recharts";
 import ResidentLayout from "./ResidentLayout.jsx";
 import {
@@ -37,38 +38,39 @@ const ResidentDashboard = () => {
       const res = await fetchConsumptionsByUser(userId);
       const data = res.data?.data || [];
 
-      const currentYear = new Date().getFullYear();
-      const months = Array.from({ length: 12 }, (_, i) => ({
-        month: i + 1,
-        cubic_used: 0,
-        current_bill: 0,
-        remaining_balance: 0,
+      // Sort data by billing_date ascending
+      const sortedData = data
+        .map((c) => ({
+          ...c,
+          billing_date: new Date(c.billing_date),
+          cubic_used: Number(c.cubic_used || 0),
+          current_bill: Number(c.current_bill || 0),
+          remaining_balance: Number(c.remaining_balance || 0),
+        }))
+        .sort((a, b) => a.billing_date - b.billing_date);
+
+      // Map to chart-friendly format
+      const chartData = sortedData.map((c) => ({
+        date: c.billing_date.toLocaleDateString("en-US", {
+          month: "short",
+          year: "numeric",
+        }),
+        cubic_used: c.cubic_used,
+        current_bill: c.current_bill,
+        remaining_balance: c.remaining_balance,
       }));
 
-      data.forEach((c) => {
-        const date = new Date(c.billing_date);
-        if (date.getFullYear() === currentYear) {
-          const monthIndex = date.getMonth();
-          months[monthIndex] = {
-            month: monthIndex + 1,
-            cubic_used: Number(c.cubic_used || 0),
-            current_bill: Number(c.current_bill || 0),
-            remaining_balance: Number(c.remaining_balance || 0),
-          };
-        }
-      });
+      setConsumptions(chartData);
 
-      setConsumptions(months);
-
-      // Calculate KPIs
-      const totalConsumption = months.reduce((acc, m) => acc + m.cubic_used, 0);
-      const totalBill = months.reduce((acc, m) => acc + m.current_bill, 0);
-      const paidMonths = months.filter((m) => m.remaining_balance === 0).length;
+      // Calculate KPIs based on all data
+      const totalConsumption = chartData.reduce((acc, m) => acc + m.cubic_used, 0);
+      const totalBill = chartData.reduce((acc, m) => acc + m.current_bill, 0);
+      const paidMonths = chartData.filter((m) => m.remaining_balance === 0).length;
 
       setKpis({
-        avgConsumption: (totalConsumption / 12).toFixed(2),
-        avgBill: (totalBill / 12).toFixed(2),
-        complianceRate: ((paidMonths / 12) * 100).toFixed(0),
+        avgConsumption: (totalConsumption / chartData.length || 0).toFixed(2),
+        avgBill: (totalBill / chartData.length || 0).toFixed(2),
+        complianceRate: ((paidMonths / chartData.length) * 100 || 0).toFixed(0),
       });
     } catch (err) {
       console.error("Failed to fetch consumptions:", err);
@@ -110,9 +112,8 @@ const ResidentDashboard = () => {
   };
 
   // -------------------- Current & Previous Month Data --------------------
-  const now = new Date();
-  const currentMonthData = consumptions[now.getMonth()] || {};
-  const previousMonthData = consumptions[now.getMonth() - 1] || {};
+  const currentMonthData = consumptions[consumptions.length - 1] || {};
+  const previousMonthData = consumptions[consumptions.length - 2] || {};
 
   return (
     <ResidentLayout
@@ -147,33 +148,46 @@ const ResidentDashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
         <div className="bg-white p-6 rounded-xl shadow-md">
           <p className="text-blue-600 text-2xl font-bold">{kpis.avgConsumption} m³</p>
-          <p className="text-gray-600 mt-1 text-sm">Average Monthly Consumption (Year)</p>
+          <p className="text-gray-600 mt-1 text-sm">Average Consumption</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-md">
           <p className="text-green-600 text-2xl font-bold">₱ {kpis.avgBill}</p>
-          <p className="text-gray-600 mt-1 text-sm">Average Monthly Bill (Year)</p>
+          <p className="text-gray-600 mt-1 text-sm">Average Bill</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-md">
           <p className="text-red-600 text-2xl font-bold">{kpis.complianceRate}%</p>
-          <p className="text-gray-600 mt-1 text-sm">Payment Compliance Rate (Year)</p>
+          <p className="text-gray-600 mt-1 text-sm">Payment Compliance</p>
         </div>
       </div>
 
-      {/* CONSUMPTION TREND CHART */}
+      {/* OVERALL CONSUMPTION & BILL TREND */}
       <div className="bg-white p-6 rounded-xl shadow-md mt-8">
-        <h2 className="text-lg font-semibold text-black mb-4">Consumption Trend (This Year)</h2>
-        <ResponsiveContainer width="100%" height={250}>
+        <h2 className="text-lg font-semibold text-black mb-4">Overall Usage & Billing Trend</h2>
+        <ResponsiveContainer width="100%" height={300}>
           <LineChart data={consumptions}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              dataKey="month"
-              tickFormatter={(m) =>
-                new Date(new Date().getFullYear(), m - 1).toLocaleString("default", { month: "short" })
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip
+              formatter={(value, name) =>
+                name === "Current Bill" ? `₱${value}` : `${value} m³`
               }
             />
-            <YAxis label={{ value: "m³", angle: -90, position: "insideLeft" }} />
-            <Tooltip formatter={(value) => `${value} m³`} />
-            <Line type="monotone" dataKey="cubic_used" stroke="#1D4ED8" strokeWidth={3} />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="cubic_used"
+              stroke="#1D4ED8"
+              strokeWidth={3}
+              name="Cubic Used"
+            />
+            <Line
+              type="monotone"
+              dataKey="current_bill"
+              stroke="#DC2626"
+              strokeWidth={3}
+              name="Current Bill"
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>

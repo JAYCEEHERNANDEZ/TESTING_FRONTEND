@@ -249,7 +249,7 @@ const ResidentPaymentDashboard = () => {
         {/* QR Column */}
         <div className="bg-white p-6 rounded-xl shadow-md flex flex-col items-center justify-start">
           <p className="mb-3 text-sm">Scan QR to Pay via GCash</p>
-          <img src={QR} alt="GCash QR" className="w-64 h-auto object-contain" />
+          <img src={QR} alt="GCash QR" className="w-auto h-auto object-contain" />
         </div>
       </div>
     </ResidentLayout>
