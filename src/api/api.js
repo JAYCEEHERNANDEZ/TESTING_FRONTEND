@@ -27,13 +27,19 @@ export const reactivateUser = (id) => userAPI.put(`/reactivate/${id}`);
 /* ---------------------------------------------
    ADMIN + METER READER
 --------------------------------------------- */
+// Base API for admin reader
 export const adminReaderAPI = axios.create({
   baseURL: "http://localhost:5000/adminreader",
   headers: { "Content-Type": "application/json" },
 });
 
+// Admin login
 export const loginadminReader = (data) =>
   adminReaderAPI.post("/loginadminreader", data);
+
+// Reset admin password
+export const resetAdminReaderPassword = (id, newPassword) =>
+  adminReaderAPI.post(`/admin-reset-password/${id}`, { newPassword });
 
 /* ---------------------------------------------
    USER CONSUMPTION (METER READINGS)

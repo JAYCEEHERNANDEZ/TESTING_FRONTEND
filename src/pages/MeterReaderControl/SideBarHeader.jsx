@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+// SideBarHeader.jsx
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaTachometerAlt,
@@ -9,32 +10,16 @@ import {
   FaBell,
   FaUserCircle,
 } from "react-icons/fa";
-import {
-  fetchConsumptions,
-  fetchAdminNotifications,
-  markAdminNotificationRead,
-} from "../api/api.js";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { fetchAdminNotifications, markAdminNotificationRead } from "../../api/api.js";
 
-const AdminDashboard = () => {
+const SideBarHeader = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [consumptions, setConsumptions] = useState([]);
-  const [filterMonth, setFilterMonth] = useState("");
-  const [filterYear, setFilterYear] = useState("");
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [adminNotifications, setAdminNotifications] = useState([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [adminNotifications, setAdminNotifications] = useState([]);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
-  const navigate = useNavigate();
   const notifRef = useRef();
+  const navigate = useNavigate();
 
   const navItems = [
     { label: "Dashboard", path: "/admin-dashboard", icon: <FaTachometerAlt /> },
@@ -45,20 +30,16 @@ const AdminDashboard = () => {
     { label: "Reports", path: "/manage-records", icon: <FaFileAlt /> },
   ];
 
-  // ---------------- Load Consumptions ----------------
-  useEffect(() => {
-    const loadConsumptions = async () => {
-      try {
-        const res = await fetchConsumptions();
-        setConsumptions(res.data?.data || []);
-      } catch (err) {
-        console.error("Error fetching consumptions:", err);
-      }
-    };
-    loadConsumptions();
-  }, []);
+  const routeTitles = {
+    "/admin-dashboard": "Admin Dashboard",
+    "/manage-records": "Manage Records",
+    "/manage-customers": "Manage Customers",
+    "/notification-center": "Notification Center",
+    "/admin-profiles": "Profiles",
+  };
 
-  // ---------------- Load Admin Notifications + Polling ----------------
+  const title = routeTitles[location.pathname] || "Dashboard";
+  // ---------------- Load Admin Notifications ----------------
   useEffect(() => {
     const loadNotifications = async () => {
       try {
@@ -70,11 +51,11 @@ const AdminDashboard = () => {
     };
 
     loadNotifications();
-    const interval = setInterval(loadNotifications, 10000); // poll every 10s
+    const interval = setInterval(loadNotifications, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // ---------------- Close dropdown when clicking outside ----------------
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -85,70 +66,11 @@ const AdminDashboard = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ---------------- Filter Consumptions ----------------
-  const filteredConsumptions = consumptions.filter((c) => {
-    const date = new Date(c.billing_date || c.created_at);
-    const monthMatch = filterMonth ? date.getMonth() + 1 === Number(filterMonth) : true;
-    const yearMatch = filterYear ? date.getFullYear() === Number(filterYear) : true;
-    return monthMatch && yearMatch;
-  });
-
-  // ---------------- KPIs ----------------
-  const now = new Date();
-  const last12Months = Array.from({ length: 12 }, (_, i) =>
-    new Date(now.getFullYear(), now.getMonth() - i, 1)
-  );
-
-  const kpiConsumptions = last12Months.flatMap((monthDate) =>
-    consumptions.filter((c) => {
-      const date = new Date(c.billing_date || c.created_at);
-      return date.getMonth() === monthDate.getMonth() && date.getFullYear() === monthDate.getFullYear();
-    })
-  );
-
-  const totalUsers = new Set(kpiConsumptions.map((c) => c.user_id)).size;
-  const totalBill = kpiConsumptions.reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
-  const totalBalance = kpiConsumptions.reduce((sum, c) => sum + Number(c.remaining_balance || 0), 0);
-  const totalIncome = kpiConsumptions.reduce(
-    (sum, c) => sum + Number(c.payment_1 || 0) + Number(c.payment_2 || 0),
-    0
-  );
-  const newUsers = kpiConsumptions.filter((c) => {
-    const created = new Date(c.created_at);
-    return last12Months.some(
-      (monthDate) =>
-        monthDate.getMonth() === created.getMonth() && monthDate.getFullYear() === created.getFullYear()
-    );
-  }).length;
-
-  // ---------------- Chart Data ----------------
-  const chartData = last12Months
-    .slice()
-    .reverse()
-    .map((monthDate) => {
-      const monthSum = consumptions
-        .filter((c) => {
-          const date = new Date(c.billing_date || c.created_at);
-          return date.getMonth() === monthDate.getMonth() && date.getFullYear() === monthDate.getFullYear();
-        })
-        .reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
-      return {
-        month: monthDate.toLocaleString("default", { month: "short", year: "numeric" }),
-        total: monthSum,
-      };
-    });
-
-  const years = Array.from(
-    new Set(consumptions.map((c) => new Date(c.billing_date || c.created_at).getFullYear()))
-  );
-
-  // ---------------- Logout ----------------
   const handleLogout = () => {
     localStorage.removeItem("user_id");
     navigate("/");
   };
 
-  // ---------------- Mark notification as read ----------------
   const handleReadNotification = async (notifId) => {
     try {
       await markAdminNotificationRead(notifId);
@@ -226,11 +148,11 @@ const AdminDashboard = () => {
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="flex-1 p-8">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="flex justify-between items-center bg-white text-blue-600 py-2 px-5 rounded-xl shadow mb-6 text-xl font-semibold">
-          <span className="text-xl font-bold">Admin Dashboard</span>
+        <header className="flex justify-between items-center bg-white text-blue-600 py-2 px-5 m-5 rounded-xl shadow mb-1 text-xl font-semibold">
+          <span className="text-xl font-bold">{title}</span>
 
           {/* Notifications */}
           <div className="relative" ref={notifRef}>
@@ -268,77 +190,13 @@ const AdminDashboard = () => {
               </div>
             )}
           </div>
-        </div>
+        </header>
 
-        {/* Filters */}
-        <div className="flex gap-4 mb-6">
-          <select
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            className="p-2 border rounded"
-          >
-            <option value="">All Months</option>
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i + 1} value={i + 1}>
-                {new Date(0, i).toLocaleString("default", { month: "long" })}
-              </option>
-            ))}
-          </select>
+        {/* Page content */}
+        <main className="flex-1 p-8">{children}</main>
+      </div>
 
-          <select
-            value={filterYear}
-            onChange={(e) => setFilterYear(e.target.value)}
-            className="p-2 border rounded"
-          >
-            <option value="">All Years</option>
-            {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-6 mt-2">
-          <div className="bg-white p-6 rounded-xl shadow-md border">
-            <p className="text-blue-600 text-3xl font-bold">{totalUsers}</p>
-            <p className="text-gray-600 mt-1 text-sm">Total Users (Last 12 Months)</p>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-md border">
-            <p className="text-green-600 text-3xl font-bold">₱ {totalBill.toLocaleString()}</p>
-            <p className="text-gray-600 mt-1 text-sm">Overall Bill (Last 12 Months)</p>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-md border">
-            <p className="text-red-600 text-3xl font-bold">₱ {totalBalance.toLocaleString()}</p>
-            <p className="text-gray-600 mt-1 text-sm">Balance of All Consumers</p>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-md border">
-            <p className="text-yellow-600 text-3xl font-bold">₱ {totalIncome.toLocaleString()}</p>
-            <p className="text-gray-600 mt-1 text-sm">Total Income</p>
-          </div>
-          <div className="bg-white p-6 rounded-xl shadow-md border">
-            <p className="text-purple-600 text-3xl font-bold">{newUsers}</p>
-            <p className="text-gray-600 mt-1 text-sm">New Users</p>
-          </div>
-        </div>
-
-        {/* 12-Month Consumption Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-md mt-6">
-          <h2 className="text-lg font-semibold mb-4">Consumption Trend (Last 12 Months)</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="total" stroke="#8884d8" activeDot={{ r: 8 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </main>
-
-      {/* LOGOUT MODAL */}
+      {/* Logout Modal */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">
@@ -364,4 +222,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default AdminDashboard;
+export default SideBarHeader;
