@@ -1,9 +1,10 @@
-// Profiles.jsx
 import React, { useEffect, useState } from "react";
 import { fetchUsers, resetUserPassword } from "../../api/api.js";
 import SideBarHeader from "./SideBarHeader.jsx";
+import usePageTitle from "../usePageTitle";
 
 const Profiles = () => {
+  usePageTitle("User Profiles");
   const [users, setUsers] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);

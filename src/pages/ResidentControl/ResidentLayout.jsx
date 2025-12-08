@@ -45,7 +45,6 @@ const ResidentLayout = ({ children, notifications, showNotifications, setShowNot
                 {sidebarOpen ? "💧 SWS" : "💧"}
                 </h1>
 
-                {/* Hamburger button */}
                 {sidebarOpen && (
                 <button
                     onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -56,7 +55,6 @@ const ResidentLayout = ({ children, notifications, showNotifications, setShowNot
                 )}
             </div>
 
-            {/* Welcome username */}
             {sidebarOpen && (
                 <div className="text-center mt-5">
                 <p className="text-xl flex flex-col text-white">
@@ -100,14 +98,14 @@ const ResidentLayout = ({ children, notifications, showNotifications, setShowNot
       {/* Main Content */}
       <div className="flex-1 flex flex-col p-4 relative m-2 ml-0">
         {/* Header */}
-        <div className="flex justify-between items-center bg-white shadow rounded-xl py-4 px-7 mb-6">
-          <span className="text-lg font-semibold text-black">{title}</span>
+        <div className="flex justify-between items-center bg-white text-blue-600 shadow rounded-xl py-2 px-7 mb-6">
+          <span className="text-xl font-bold">{title}</span>
 
           {/* Notifications */}
           <div className="relative">
-            <button
+           <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="bg-blue-500 hover:bg-blue-400 text-white p-2 rounded-full relative"
+              className="bg-blue-500 hover:bg-blue-400 text-white p-2 rounded-full relative text-xl"
             >
               🔔
               {notifications.filter((n) => Number(n.is_read) === 0).length > 0 && (
@@ -146,7 +144,7 @@ const ResidentLayout = ({ children, notifications, showNotifications, setShowNot
         <main className="flex-1">{children}</main>
       </div>
 
-      {/* Logout Modal */}
+      {/* Logout */}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">

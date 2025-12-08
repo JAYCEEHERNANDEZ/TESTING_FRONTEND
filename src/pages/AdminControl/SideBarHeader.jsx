@@ -32,7 +32,6 @@ const SideBarHeader = ({ children }) => {
     { label: "Notifications Center", path: "/notification-center", icon: <FaBell /> },
     { label: "Profiles", path: "/admin-profiles", icon: <FaUserCog /> },
     { label: "Manage Customers", path: "/manage-customers", icon: <FaUsers /> },
-    { label: "Settings", path: "/admin-settings", icon: <FaFileAlt /> },
   ];
 
   const routeTitles = {
@@ -61,7 +60,7 @@ const SideBarHeader = ({ children }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Close notification dropdown on outside click
+  // Close notification
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -260,7 +259,7 @@ const SideBarHeader = ({ children }) => {
         </div>
       )}
 
-      {/* Change Password Modal */}
+      {/* Change Password */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 bg-transparent">
           <div className="bg-white rounded-xl p-6 w-96 shadow-lg">

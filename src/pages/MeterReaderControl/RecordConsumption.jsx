@@ -2,19 +2,21 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchConsumptions, addConsumption } from "../../api/api.js";
 import MeterReaderLayout from "./MeterReaderLayout.jsx";
+import usePageTitle from "../usePageTitle";
 
 const RecordConsumption = () => {
+  usePageTitle("Record Consumption");
   const [customers, setCustomers] = useState([]);
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [currentReadingInput, setCurrentReadingInput] = useState("");
   const [calculatedBill, setCalculatedBill] = useState(0);
   const [message, setMessage] = useState("");
-  const [filterStatus, setFilterStatus] = useState("all"); // all / recorded / not-recorded
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const navigate = useNavigate();
 
-  // -------------------- LOAD DATA --------------------
+// Load data
   useEffect(() => {
     loadConsumptions();
   }, []);
@@ -46,7 +48,7 @@ const RecordConsumption = () => {
     }
   };
 
-  // -------------------- CUSTOMER SELECTION --------------------
+  // Customer Selection
   const selectCustomer = (customer) => {
     setSelectedCustomer(customer);
     setCurrentReadingInput("");
@@ -54,7 +56,7 @@ const RecordConsumption = () => {
     setMessage("");
   };
 
-  // -------------------- BILL CALCULATION --------------------
+// Bill Calculation
   const calculateBill = (cubicUsed) => {
     if (cubicUsed <= 5) return 270;
     return 270 + (cubicUsed - 5) * 17;
@@ -66,7 +68,7 @@ const RecordConsumption = () => {
     setCalculatedBill(calculateBill(value));
   };
 
-  // -------------------- RECORD SUBMISSION --------------------
+ // Submit Reading
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedCustomer) return;
@@ -104,7 +106,7 @@ const RecordConsumption = () => {
     setTimeout(() => setMessage(""), 5000);
   };
 
-  // -------------------- FILTERING --------------------
+  // Utility Functions
   const canRecord = (customer) => {
     if (!customer?.billing_date) return true;
     const lastDate = new Date(customer.billing_date);
@@ -133,13 +135,12 @@ const RecordConsumption = () => {
     }
   };
 
-  // -------------------- LOGOUT --------------------
+// Logout
   const handleLogout = () => {
     localStorage.removeItem("user_id");
     navigate("/");
   };
 
-  // -------------------- RENDER MAIN CONTENT --------------------
   const content = (
     <>
       {/* Total Customers and Filter */}
@@ -153,7 +154,7 @@ const RecordConsumption = () => {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="p-2 border rounded"
+            className="p-2 shadow rounded"
           >
             <option value="all">All</option>
             <option value="not-recorded">Not Recorded</option>
@@ -215,7 +216,6 @@ const RecordConsumption = () => {
             <p><strong>Total Bill:</strong> ₱ {selectedCustomer.total_bill}</p>
           </div>
 
-          {/* Conditional Rendering */}
           {canRecord(selectedCustomer) ? (
             <>
               <h3 className="text-lg font-semibold mb-4 text-blue-600">Enter Current Reading</h3>

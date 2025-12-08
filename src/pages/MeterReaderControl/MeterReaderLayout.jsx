@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { Link, useLocation } from "react-router-dom"; // ✅ import useLocation
+import { Link, useLocation } from "react-router-dom";
 import { FaTachometerAlt, FaFolderOpen, FaUserCircle } from "react-icons/fa";
+import usePageTitle from "../usePageTitle";
 
 const MeterReaderLayout = ({ children }) => {
+  usePageTitle("Meter Reader Control");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const location = useLocation(); // ✅ useLocation hook
+  const location = useLocation();
 
   const navItems = [
     { label: "Dashboard", path: "/meter-dashboard", icon: <FaTachometerAlt /> },
@@ -14,7 +16,7 @@ const MeterReaderLayout = ({ children }) => {
 
   const routeTitles = {
     "/meter-dashboard": "Meter Reader Dashboard",
-    "/record-consumption": "Record Consumption", // ✅ fixed path key
+    "/record-consumption": "Record Consumption",
   };
 
   const title = routeTitles[location.pathname] || "Dashboard";
@@ -99,7 +101,7 @@ const MeterReaderLayout = ({ children }) => {
         <main className="flex-1 p-8">{children}</main>
       </div>
 
-      {/* Logout Modal */}
+      {/* Logout module*/}
       {showLogoutModal && (
         <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-80 shadow-lg text-center">

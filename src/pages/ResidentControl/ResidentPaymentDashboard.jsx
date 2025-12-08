@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FaHistory } from "react-icons/fa";
+import { FaHistory, FaTimes } from "react-icons/fa";
 import QR from "../../Pictures/qr-code.png";
 import {
   fetchUserPayments,
@@ -10,8 +10,10 @@ import {
   submitReferenceCodeAPI
 } from "../../api/api.js";
 import ResidentLayout from "./ResidentLayout.jsx";
+import usePageTitle from "../usePageTitle";
 
 const ResidentPaymentDashboard = () => {
+  usePageTitle("Resident Payment Dashboard");
   const [userData, setUserData] = useState(null);
   const [latestUnpaid, setLatestUnpaid] = useState(null);
   const [currentPaid, setCurrentPaid] = useState({ payment_total: 0, status: "Unpaid" });
@@ -21,11 +23,20 @@ const ResidentPaymentDashboard = () => {
   const [proofImage, setProofImage] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [message, setMessage] = useState({ type: "", text: "" });
+  const [stickyMessage, setStickyMessage] = useState(null);
 
   const userId = Number(localStorage.getItem("user_id"));
 
-  // ---------------- Load User Data ----------------
+ // load user data, payments, notifications
+  useEffect(() => {
+    if (!userId) return;
+    loadUserData();
+    loadPayments();
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 10000);
+    return () => clearInterval(interval);
+  }, [userId]);
+
   const loadUserData = async () => {
     try {
       const res = await fetchUserById(userId);
@@ -35,18 +46,15 @@ const ResidentPaymentDashboard = () => {
     }
   };
 
-  // ---------------- Load Payments ----------------
   const loadPayments = async () => {
     try {
       const res = await fetchUserPayments(userId);
       const sorted = res.data.data.sort((a, b) => new Date(b.billing_date) - new Date(a.billing_date));
       setPaymentHistory(sorted);
 
-      // Latest unpaid bill
       const unpaid = sorted.find(p => Number(p.remaining_balance) > 0) || null;
       setLatestUnpaid(unpaid);
 
-      // Current month paid calculation
       const now = new Date();
       const paidThisMonth = sorted.filter(
         p =>
@@ -63,8 +71,16 @@ const ResidentPaymentDashboard = () => {
       else status = "Paid";
 
       setCurrentPaid({ payment_total: totalPaidNow, status });
-
       resetForm();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const res = await fetchUserNotificationsPerUser(userId);
+      setNotifications(res.data.notifications || []);
     } catch (err) {
       console.error(err);
     }
@@ -75,63 +91,41 @@ const ResidentPaymentDashboard = () => {
     setProofImage(null);
   };
 
-  // ---------------- Load Notifications ----------------
-  const loadNotifications = async () => {
-    try {
-      const res = await fetchUserNotificationsPerUser(userId);
-      setNotifications(res.data.notifications || []);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    if (userId) {
-      loadPayments();
-      loadUserData();
-      loadNotifications();
-      const interval = setInterval(loadNotifications, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [userId]);
-
-  // ---------------- Handlers ----------------
+ // handle image upload
   const handleImageUpload = (e) => setProofImage(e.target.files[0]);
 
   const handleSubmitProof = async () => {
-    if (!latestUnpaid) return setMessage({ type: "error", text: "No unpaid bill found." });
-    if (!referenceCode.trim()) return setMessage({ type: "error", text: "Enter GCash reference code!" });
-    if (!proofImage) return setMessage({ type: "error", text: "Upload proof image!" });
+    if (!latestUnpaid) return showStickyMessage("error", "No unpaid bill found.");
+    if (!referenceCode.trim()) return showStickyMessage("error", "Enter GCash reference code!");
+    if (!proofImage) return showStickyMessage("error", "Upload proof image!");
 
     const amount = latestUnpaid.remaining_balance - (latestUnpaid.pending_amount || 0);
-    if (amount <= 0) return setMessage({ type: "error", text: "This bill is already fully paid or pending verification." });
+    if (amount <= 0) return showStickyMessage("error", "This bill is already fully paid or pending verification.");
 
     try {
+      // Submit reference code
       await submitReferenceCodeAPI({
         user_id: userId,
         bill_id: latestUnpaid.id,
         reference_code: referenceCode.trim()
       });
 
+      // Upload proof image
       const formData = new FormData();
       formData.append("user_id", userId);
       formData.append("bill_id", latestUnpaid.id);
       formData.append("amount", amount);
-      formData.append("payment_type", "full");
+      formData.append("payment_type", latestUnpaid.payment_1 > 0 ? "second" : "full");
       formData.append("proof", proofImage);
 
       await uploadPaymentProof(formData);
 
-      setMessage({ type: "success", text: "Payment submitted successfully! Waiting for admin verification." });
+      showStickyMessage("success", "Payment submitted successfully! Waiting for admin verification.");
       resetForm();
-
-      setTimeout(() => {
-        loadPayments();
-        setMessage({ type: "", text: "" });
-      }, 2000);
+      loadPayments();
     } catch (err) {
       console.error(err);
-      setMessage({ type: "error", text: "Submission failed. Try again!" });
+      showStickyMessage("error", "Submission failed. Try again!");
     }
   };
 
@@ -144,6 +138,12 @@ const ResidentPaymentDashboard = () => {
     }
   };
 
+  const showStickyMessage = (type, text) => {
+    setStickyMessage({ type, text });
+  };
+
+  const dismissStickyMessage = () => setStickyMessage(null);
+
   const getStatusClass = (status) => {
     switch (status) {
       case "Paid":
@@ -155,7 +155,6 @@ const ResidentPaymentDashboard = () => {
     }
   };
 
-  // ---------------- Render ----------------
   return (
     <ResidentLayout
       notifications={notifications}
@@ -163,9 +162,12 @@ const ResidentPaymentDashboard = () => {
       setShowNotifications={setShowNotifications}
       handleMarkAsRead={handleMarkAsRead}
     >
-      {message.text && (
-        <div className={`mb-4 p-3 rounded ${message.type === "success" ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}>
-          {message.text}
+      {stickyMessage && (
+        <div className={`fixed top-4 right-4 z-50 p-4 rounded shadow-lg font-semibold ${stickyMessage.type === "success" ? "bg-green-600 text-white" : "bg-red-500 text-white"} flex items-center justify-between gap-4`}>
+          <span>{stickyMessage.text}</span>
+          <button onClick={dismissStickyMessage} className="text-white hover:text-gray-200">
+            <FaTimes />
+          </button>
         </div>
       )}
 
@@ -186,7 +188,7 @@ const ResidentPaymentDashboard = () => {
                 )}
               </div>
               <p className="text-gray-600 mt-1">Latest Unpaid Bill</p>
-              {latestUnpaid && <span className="text-xs text-gray-500">Due: {new Date(latestUnpaid.due_date).toLocaleDateString()}</span>}
+              {latestUnpaid && <span className="text-xs text-gray-500">Due Date: {new Date(latestUnpaid.due_date).toLocaleDateString()}</span>}
             </div>
 
             {/* Current Month Paid */}
@@ -201,6 +203,12 @@ const ResidentPaymentDashboard = () => {
           {latestUnpaid && (
             <div className="bg-white p-6 rounded-xl shadow-md">
               <h3 className="font-semibold mb-3">Submit GCash Payment</h3>
+              {latestUnpaid.payment_1 > 0 && (
+                <p className="mb-3 text-red-600 font-semibold">
+                  Note: Next payment must be exactly ₱{latestUnpaid.remaining_balance}.
+                </p>
+              )}
+
               <input
                 type="text"
                 placeholder="Enter GCash reference code"

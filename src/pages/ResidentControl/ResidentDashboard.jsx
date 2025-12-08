@@ -15,8 +15,10 @@ import {
   fetchUserNotices,
   markNoticeAsRead,
 } from "../../api/api.js";
+import usePageTitle from "../usePageTitle";
 
 const ResidentDashboard = () => {
+  usePageTitle("Resident Dashboard");
   const [consumptions, setConsumptions] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -28,7 +30,7 @@ const ResidentDashboard = () => {
 
   const userId = localStorage.getItem("user_id");
 
-  // -------------------- Load consumptions --------------------
+  // load consumptions
   useEffect(() => {
     if (userId) loadConsumptions(userId);
   }, [userId]);
@@ -49,7 +51,6 @@ const ResidentDashboard = () => {
         }))
         .sort((a, b) => a.billing_date - b.billing_date);
 
-      // Map to chart-friendly format
       const chartData = sortedData.map((c) => ({
         date: c.billing_date.toLocaleDateString("en-US", {
           month: "short",
@@ -62,7 +63,7 @@ const ResidentDashboard = () => {
 
       setConsumptions(chartData);
 
-      // Calculate KPIs based on all data
+      // Calculate KPIs 
       const totalConsumption = chartData.reduce((acc, m) => acc + m.cubic_used, 0);
       const totalBill = chartData.reduce((acc, m) => acc + m.current_bill, 0);
       const paidMonths = chartData.filter((m) => m.remaining_balance === 0).length;
@@ -77,7 +78,7 @@ const ResidentDashboard = () => {
     }
   };
 
-  // -------------------- Load notifications --------------------
+// load notifications
   useEffect(() => {
     loadNotifications();
     const interval = setInterval(loadNotifications, 10000);
@@ -111,7 +112,7 @@ const ResidentDashboard = () => {
     }
   };
 
-  // -------------------- Current & Previous Month Data --------------------
+// current & previous month data
   const currentMonthData = consumptions[consumptions.length - 1] || {};
   const previousMonthData = consumptions[consumptions.length - 2] || {};
 
@@ -134,7 +135,7 @@ const ResidentDashboard = () => {
           <p className="text-blue-400 text-2xl font-bold">
             {previousMonthData?.cubic_used ?? 0} m³
           </p>
-          <p className="text-gray-600 mt-1 text-sm">Previous Month Usage</p>
+          <p className="text-gray-600 mt-1 text-sm">Previous Usage</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-md">
           <p className="text-green-600 text-2xl font-bold">
@@ -162,7 +163,7 @@ const ResidentDashboard = () => {
 
       {/* OVERALL CONSUMPTION & BILL TREND */}
       <div className="bg-white p-6 rounded-xl shadow-md mt-8">
-        <h2 className="text-lg font-semibold text-black mb-4">Overall Usage & Billing Trend</h2>
+        <h2 className="text-lg font-semibold text-black mb-4">Usage & Billing Trend</h2>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={consumptions}>
             <CartesianGrid strokeDasharray="3 3" />

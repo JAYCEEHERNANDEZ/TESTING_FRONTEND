@@ -1,16 +1,17 @@
-// MeterReaderDashboard.jsx
 import React, { useState, useEffect } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts";
 import SideBarHeader from "./SideBarHeader.jsx";
 import { fetchConsumptions, fetchUsers } from "../../api/api.js";
+import usePageTitle from "../usePageTitle";
 
 const AdminDashboard = () => {
+  usePageTitle("Admin Dashboard");
   const [consumptions, setConsumptions] = useState([]);
   const [users, setUsers] = useState([]);
   const [filterMonth, setFilterMonth] = useState("");
   const [filterYear, setFilterYear] = useState("");
 
-  // -------------------- Load Data --------------------
+// Load data
   useEffect(() => {
     loadConsumptions();
     loadUsers();
@@ -34,7 +35,7 @@ const AdminDashboard = () => {
     }
   };
 
-  // -------------------- Filters --------------------
+  // Filters
   const years = Array.from(new Set([
     ...consumptions.map(c => new Date(c.billing_date || c.created_at).getFullYear()),
     ...users.map(u => new Date(u.created_at).getFullYear())
@@ -52,14 +53,14 @@ const AdminDashboard = () => {
            (!filterMonth || created.getMonth() + 1 === Number(filterMonth));
   });
 
-  // -------------------- KPI Calculations --------------------
+  // KPI Calculations
   const totalBill = filteredConsumptions.reduce((sum, c) => sum + Number(c.total_bill || 0), 0);
   const totalBalance = filteredConsumptions.reduce((sum, c) => sum + Number(c.remaining_balance || 0), 0);
   const totalIncome = filteredConsumptions.reduce((sum, c) => sum + Number(c.payment_total || 0), 0);
   const totalCubicUsed = filteredConsumptions.reduce((sum, c) => sum + Number(c.cubic_used || 0), 0);
   const totalUsersFiltered = filteredUsers.length;
 
-  // -------------------- Chart Data --------------------
+  // Chart Data
   const chartDataMap = {};
   filteredConsumptions.forEach(c => {
     if (!c.billing_date) return;
