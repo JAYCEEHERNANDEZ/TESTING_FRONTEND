@@ -13,6 +13,7 @@ import usePageTitle from "../usePageTitle";
 
 const ManageCustomers = () => {
   usePageTitle("Manage Customers");
+
   const [customers, setCustomers] = useState([]);
   const [formData, setFormData] = useState({ name: "", username: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
@@ -49,7 +50,7 @@ const ManageCustomers = () => {
   // ---------- Sticky notification ----------
   const showNotification = (type, message) => {
     setNotifications([{ type, message }]);
-    setTimeout(() => setNotifications([]), 5000); // auto-hide after 5 seconds
+    setTimeout(() => setNotifications([]), 5000);
   };
 
   // ---------- Add Customer ----------
@@ -92,10 +93,10 @@ const ManageCustomers = () => {
   };
 
   // ---------- Send Overdue Notice ----------
-  const handleSendOverdueNotice = async (user_id) => {
+  const handleSendOverdueNotice = async (user) => {
     setSendingNotice(true);
     try {
-      await sendDeactNotice({ user_id });
+      await sendDeactNotice({ user_id: user.user_id, billing_date: user.billing_date });
       showNotification("success", "Notice sent successfully!");
       loadOverdueUsers();
     } catch (err) {
@@ -110,7 +111,9 @@ const ManageCustomers = () => {
     setSendingNotice(true);
     try {
       for (const u of overdueUsers) {
-        if (!u.notice_sent) await sendDeactNotice({ user_id: u.user_id });
+        if (!u.notice_sent) {
+          await sendDeactNotice({ user_id: u.user_id, billing_date: u.billing_date });
+        }
       }
       showNotification("success", "Notice sent to all overdue users!");
       loadOverdueUsers();
@@ -129,11 +132,11 @@ const ManageCustomers = () => {
     <SideBarHeader>
       {/* ---------- Sticky Notification ---------- */}
       {notifications.length > 0 && (
-        <div className={`fixed top-5 right-5 p-4 rounded shadow z-50 transition-all ${
-          notifications[0].type === "success"
-            ? "bg-green-600 text-white"
-            : "bg-red-100 text-red-800"
-        }`}>
+        <div
+          className={`fixed top-5 right-5 p-4 rounded shadow z-50 transition-all ${
+            notifications[0].type === "success" ? "bg-green-600 text-white" : "bg-red-100 text-red-800"
+          }`}
+        >
           {notifications[0].message}
         </div>
       )}
@@ -223,14 +226,20 @@ const ManageCustomers = () => {
                   <tr key={user.id} className="hover:bg-gray-50 transition">
                     <td className="p-3">{user.name}</td>
                     <td className="p-3">{user.username}</td>
-                    <td className={`p-3 font-semibold ${user.is_active ? "text-green-600" : "text-red-600"}`}>
+                    <td
+                      className={`p-3 font-semibold ${
+                        user.is_active ? "text-green-600" : "text-red-600"
+                      }`}
+                    >
                       {user.is_active ? "Active" : "Deactivated"}
                     </td>
                     <td className="p-3">
                       <button
                         onClick={() => handleToggleStatus(user)}
                         className={`px-4 py-2 rounded-lg shadow text-white ${
-                          user.is_active ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"
+                          user.is_active
+                            ? "bg-red-600 hover:bg-red-700"
+                            : "bg-green-600 hover:bg-green-700"
                         }`}
                       >
                         {user.is_active ? "Deactivate" : "Reactivate"}
@@ -260,22 +269,33 @@ const ManageCustomers = () => {
             </div>
             {overdueUsers.length === 0 && <p className="text-gray-500">No overdue users</p>}
             {overdueUsers.map((u) => (
-              <div key={u.user_id} className="flex flex-col gap-1 p-3 bg-gray-50 rounded shadow hover:shadow-md">
+              <div
+                key={`${u.user_id}-${u.billing_date}`} // unique key per month
+                className="flex flex-col gap-1 p-3 bg-gray-50 rounded shadow hover:shadow-md"
+              >
                 <div className="flex justify-between items-center">
                   <span className="font-semibold">{u.name}</span>
                   <button
                     className={`px-2 py-1 text-xs rounded ${
-                      u.notice_sent ? "bg-gray-400 text-white cursor-not-allowed" : "bg-red-600 text-white hover:bg-red-700"
+                      u.notice_sent
+                        ? "bg-gray-400 text-white cursor-not-allowed"
+                        : "bg-red-600 text-white hover:bg-red-700"
                     }`}
-                    onClick={() => handleSendOverdueNotice(u.user_id)}
+                    onClick={() => handleSendOverdueNotice(u)}
                     disabled={u.notice_sent || sendingNotice}
                   >
                     {u.notice_sent ? "Sent" : "Send"}
                   </button>
                 </div>
-                <p className="text-sm text-gray-700">Billing Date: {new Date(u.billing_date).toLocaleDateString()}</p>
-                <p className="text-sm text-gray-700">Due Date: {new Date(u.due_date).toLocaleDateString()}</p>
-                <p className="text-sm text-red-600 font-semibold">Remaining: ₱{u.remaining_balance}</p>
+                <p className="text-sm text-gray-700">
+                  Billing Date: {new Date(u.billing_date).toLocaleDateString()}
+                </p>
+                <p className="text-sm text-gray-700">
+                  Due Date: {new Date(u.due_date).toLocaleDateString()}
+                </p>
+                <p className="text-sm text-red-600 font-semibold">
+                  Remaining: ₱{u.remaining_balance}
+                </p>
               </div>
             ))}
           </div>
