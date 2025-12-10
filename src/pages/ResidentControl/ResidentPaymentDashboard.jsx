@@ -235,14 +235,14 @@ const ResidentPaymentDashboard = () => {
             {/* Enforced/Latest Unpaid Card */}
             <div className="bg-white p-6 rounded-xl shadow-md flex flex-col gap-2 justify-between">
               <div className="flex items-center justify-between">
-                <p className="text-blue-600 lg:text-2xl md:text-2xl text-default font-bold">
+                <p className="text-blue-600 text-2xl font-bold">
                   ₱{" "}
                   {selectedBill
                     ? ((parseFloat(selectedBill.remaining_balance || 0) - parseFloat(selectedBill.pending_amount || 0)) || 0).toLocaleString()
                     : 0}
                 </p>
                 {selectedBill && (
-                  <span className={`px-3 py-1 lg:text-2xl md:text-2xl text-sm rounded-full font-semibold ${getStatusClass(selectedBill.status)}`}>
+                  <span className={`px-3 py-1 text-sm rounded-full font-semibold ${getStatusClass(selectedBill.status)}`}>
                     {selectedBill.status}
                   </span>
                 )}
@@ -262,7 +262,7 @@ const ResidentPaymentDashboard = () => {
 
             {/* Current Month Paid summary */}
             <div className="bg-white p-6 rounded-xl shadow-md flex flex-col gap-2 justify-between">
-              <p className="text-green-600 lg:text-2xl md:text-2xl text-default font-bold">₱ {currentPaidSummary.payment_total.toLocaleString()}</p>
+              <p className="text-green-600 text-2xl font-bold">₱ {currentPaidSummary.payment_total.toLocaleString()}</p>
               <p className="text-gray-600 mt-1">Current Month Paid</p>
               <span className="text-xs text-gray-500">Status: {currentPaidSummary.status}</span>
             </div>
