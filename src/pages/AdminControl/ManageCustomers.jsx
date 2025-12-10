@@ -1,3 +1,4 @@
+// ManageCustomers.jsx
 import React, { useEffect, useState } from "react";
 import SideBarHeader from "./SideBarHeader.jsx";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
@@ -6,10 +7,9 @@ import {
   registerUser,
   deactivateUser,
   reactivateUser,
-  fetchOverdueUsers,
-  sendDeactNotice,
 } from "../../api/api.js";
 import usePageTitle from "../usePageTitle";
+import OverdueUsersPanel from "./OverdueUsersPanel.jsx"; // ✅ import overdue panel
 
 const ManageCustomers = () => {
   usePageTitle("Manage Customers");
@@ -18,13 +18,10 @@ const ManageCustomers = () => {
   const [formData, setFormData] = useState({ name: "", username: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [overdueUsers, setOverdueUsers] = useState([]);
-  const [sendingNotice, setSendingNotice] = useState(false);
 
-  // ---------- Load users and overdue users ----------
+  // ---------- Load users ----------
   useEffect(() => {
     loadUsers();
-    loadOverdueUsers();
   }, []);
 
   const loadUsers = async () => {
@@ -34,16 +31,6 @@ const ManageCustomers = () => {
     } catch (err) {
       console.error(err);
       showNotification("error", "Failed to fetch users.");
-    }
-  };
-
-  const loadOverdueUsers = async () => {
-    try {
-      const res = await fetchOverdueUsers();
-      if (res.data.success) setOverdueUsers(res.data.users);
-    } catch (err) {
-      console.error(err);
-      showNotification("error", "Failed to fetch overdue users.");
     }
   };
 
@@ -92,39 +79,6 @@ const ManageCustomers = () => {
     }
   };
 
-  // ---------- Send Overdue Notice ----------
-  const handleSendOverdueNotice = async (user) => {
-    setSendingNotice(true);
-    try {
-      await sendDeactNotice({ user_id: user.user_id, billing_date: user.billing_date });
-      showNotification("success", "Notice sent successfully!");
-      loadOverdueUsers();
-    } catch (err) {
-      console.error(err);
-      showNotification("error", "Failed to send notice.");
-    } finally {
-      setSendingNotice(false);
-    }
-  };
-
-  const handleSendNoticeAll = async () => {
-    setSendingNotice(true);
-    try {
-      for (const u of overdueUsers) {
-        if (!u.notice_sent) {
-          await sendDeactNotice({ user_id: u.user_id, billing_date: u.billing_date });
-        }
-      }
-      showNotification("success", "Notice sent to all overdue users!");
-      loadOverdueUsers();
-    } catch (err) {
-      console.error(err);
-      showNotification("error", "Failed to send notice to all.");
-    } finally {
-      setSendingNotice(false);
-    }
-  };
-
   const totalCustomers = customers.length;
   const activeCustomers = customers.filter((c) => c.is_active).length;
 
@@ -142,7 +96,7 @@ const ManageCustomers = () => {
       )}
 
       <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Column: Main Content */}
+        {/* Left Column: Customers */}
         <div className="flex-1 flex flex-col gap-6 overflow-y-auto max-h-[calc(100vh-80px)]">
           {/* KPIs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -252,54 +206,8 @@ const ManageCustomers = () => {
           </div>
         </div>
 
-        {/* Right Column: Overdue Users */}
-        <div className="w-full lg:w-80 flex-shrink-0 top-20 h-[calc(100vh-80px)] overflow-y-auto">
-          <div className="bg-white p-4 rounded-xl shadow-md flex flex-col gap-3">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-red-700">Overdue Users</h3>
-              {overdueUsers.length > 0 && (
-                <button
-                  className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-                  onClick={handleSendNoticeAll}
-                  disabled={sendingNotice}
-                >
-                  {sendingNotice ? "Sending..." : "Send All"}
-                </button>
-              )}
-            </div>
-            {overdueUsers.length === 0 && <p className="text-gray-500">No overdue users</p>}
-            {overdueUsers.map((u) => (
-              <div
-                key={`${u.user_id}-${u.billing_date}`} // unique key per month
-                className="flex flex-col gap-1 p-3 bg-gray-50 rounded shadow hover:shadow-md"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="font-semibold">{u.name}</span>
-                  <button
-                    className={`px-2 py-1 text-xs rounded ${
-                      u.notice_sent
-                        ? "bg-gray-400 text-white cursor-not-allowed"
-                        : "bg-red-600 text-white hover:bg-red-700"
-                    }`}
-                    onClick={() => handleSendOverdueNotice(u)}
-                    disabled={u.notice_sent || sendingNotice}
-                  >
-                    {u.notice_sent ? "Sent" : "Send"}
-                  </button>
-                </div>
-                <p className="text-sm text-gray-700">
-                  Billing Date: {new Date(u.billing_date).toLocaleDateString()}
-                </p>
-                <p className="text-sm text-gray-700">
-                  Due Date: {new Date(u.due_date).toLocaleDateString()}
-                </p>
-                <p className="text-sm text-red-600 font-semibold">
-                  Remaining: ₱{u.remaining_balance}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Right Column: Overdue Users Panel */}
+        <OverdueUsersPanel />
       </div>
     </SideBarHeader>
   );

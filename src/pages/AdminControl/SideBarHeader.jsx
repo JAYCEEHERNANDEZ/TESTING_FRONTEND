@@ -1,4 +1,3 @@
-// SideBarHeader.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -6,11 +5,14 @@ import {
   FaFolderOpen,
   FaUserCog,
   FaUsers,
-  FaFileAlt,
   FaBell,
   FaUserCircle,
 } from "react-icons/fa";
-import { fetchAdminNotifications, markAdminNotificationRead, resetAdminReaderPassword } from "../../api/api.js";
+import {
+  fetchAdminNotifications,
+  markAdminNotificationRead,
+  resetAdminReaderPassword,
+} from "../../api/api.js";
 
 const SideBarHeader = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -60,7 +62,7 @@ const SideBarHeader = ({ children }) => {
     return () => clearInterval(interval);
   }, []);
 
-  // Close notification
+  // Close notification dropdown
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
@@ -207,19 +209,35 @@ const SideBarHeader = ({ children }) => {
                 {adminNotifications.length === 0 ? (
                   <p className="p-4 text-gray-600 text-center">No notifications</p>
                 ) : (
-                  adminNotifications.map((notif) => (
-                    <div
-                      key={notif.id}
-                      className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${
-                        Number(notif.is_read) === 0 ? "bg-blue-50" : ""
-                      }`}
-                      onClick={() => handleReadNotification(notif.id)}
-                    >
-                      <p className="font-semibold text-sm text-gray-800">{notif.title}</p>
-                      <p className="text-xs text-gray-600">{notif.message}</p>
-                      <small className="text-gray-500 text-xs">{new Date(notif.created_at).toLocaleString()}</small>
-                    </div>
-                  ))
+                  adminNotifications.map((notif) => {
+                    // Parse JSON messages
+                    let messages = [];
+                    try {
+                      messages = JSON.parse(notif.message).messages || [];
+                    } catch {
+                      messages = [notif.message];
+                    }
+
+                    return (
+                      <div
+                        key={notif.id}
+                        className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${
+                          Number(notif.is_read) === 0 ? "bg-blue-50" : ""
+                        }`}
+                        onClick={() => handleReadNotification(notif.id)}
+                      >
+                        <p className="font-semibold text-sm text-gray-800">{notif.title}</p>
+                        {messages.map((msg, idx) => (
+                          <p key={idx} className="text-xs text-gray-600">
+                            {msg}
+                          </p>
+                        ))}
+                        <small className="text-gray-500 text-xs">
+                          {new Date(notif.created_at).toLocaleString()}
+                        </small>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -266,7 +284,11 @@ const SideBarHeader = ({ children }) => {
             <h2 className="text-xl font-bold mb-4 text-blue-700">Change Password</h2>
 
             {message.text && (
-              <p className={`mb-2 p-2 rounded ${message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+              <p
+                className={`mb-2 p-2 rounded ${
+                  message.type === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                }`}
+              >
                 {message.text}
               </p>
             )}

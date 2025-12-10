@@ -31,7 +31,6 @@ const ManageRecords = () => {
   const [sendingNotice, setSendingNotice] = useState(false);
   const [stickyMessage, setStickyMessage] = useState(null);
 
-  // Local inputs for admin-entered payment amounts, keyed by record id
   const [adminPayments, setAdminPayments] = useState({});
 
   // Helpers
@@ -132,7 +131,6 @@ const ManageRecords = () => {
       }
     };
     loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users]);
 
   const expandUser = async (userId) => {
@@ -402,112 +400,114 @@ const ManageRecords = () => {
                 </div>
               </div>
 
-              {/* Expanded */}
+              {/* Expanded User Records */}
               {expandedUserId === user.id && (
                 <div className="mt-4 grid grid-cols-3 gap-2">
+                  {/* Left side: Payment Details */}
                   <div className="col-span-2 flex flex-col gap-3 space-y-1.5">
                     {records.length > 0 ? (
-                      records.map((r, index) => {
-                        const status = getStatus(r);
-                        const isCurrent = index === 0;
-                        const isPrev = index === 1;
-                        const disablePaymentDueToPrev = isCurrent && prevUnpaidExists;
+                      // Filter out fully paid previous month records
+                      records
+                        .filter((r, index) => {
+                          const status = getStatus(r);
+                          const isPrev = index === 1; // previous month
+                          // Skip previous month if fully paid
+                          if (isPrev && status === "Paid") return false;
+                          return true;
+                        })
+                        .map((r, index) => {
+                          const status = getStatus(r);
+                          const isCurrent = index === 0;
+                          const isPrev = index === 1;
+                          const disablePaymentDueToPrev = isCurrent && records[1] && getStatus(records[1]) !== "Paid";
 
-                        // value shown in input: adminPayments[r.id] if set, otherwise default for prev = remaining_balance (helpful), else empty
-                        const inputVal = adminPayments[r.id] !== undefined ? adminPayments[r.id] : (isPrev ? String(Number(r.remaining_balance || 0).toFixed(2)) : "");
+                          const inputVal =
+                            adminPayments[r.id] !== undefined
+                              ? adminPayments[r.id]
+                              : isPrev
+                              ? String(Number(r.remaining_balance || 0).toFixed(2))
+                              : "";
 
-                        // For prev validation: must equal remaining_balance
-                        const prevRequiresExact = isPrev && Number(r.remaining_balance || 0) > 0;
-                        const prevAmountMatches = prevRequiresExact ? isAmountEqual(inputVal, Number(r.remaining_balance || 0)) : true;
+                          return (
+                            <div key={r.id} className="p-4 bg-gray-50 rounded-lg flex flex-col gap-2 shadow relative hover:shadow-md transition">
+                              <span className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(status)}`}>
+                                {status}
+                              </span>
 
-                        const showPrevInlineWarning = prevRequiresExact && !prevAmountMatches;
+                              <p><strong>Billing Month:</strong> {new Date(r.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+                              <p><strong>Previous Reading:</strong> {r.previous_reading ?? "N/A"}</p>
+                              <p><strong>Current Reading:</strong> {r.present_reading ?? "N/A"}</p>
+                              <p><strong>Consumption:</strong> {r.cubic_used ?? "0"} m³</p>
+                              <p><strong>Total Bill:</strong> ₱{r.total_bill ?? "0"}</p>
+                              <p><strong>Payment 1:</strong> ₱{r.payment_1 ?? "0"}</p>
+                              <p><strong>Payment 2:</strong> ₱{r.payment_2 ?? "0"}</p>
+                              <p><strong>Remaining Balance:</strong> ₱{r.remaining_balance ?? "0"}</p>
+                              <p><strong>Reference Code:</strong> {r.reference_code || "N/A"}</p>
 
-                        return (
-                          <div key={r.id} className="p-4 bg-gray-50 rounded-lg flex flex-col gap-2 shadow relative hover:shadow-md transition">
-                            <span className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${getStatusClass(status)}`}>{status}</span>
-
-                            <p><strong>Billing Month:</strong> {new Date(r.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
-                            <p><strong>Previous Reading:</strong> {r.previous_reading ?? "N/A"}</p>
-                            <p><strong>Current Reading:</strong> {r.present_reading ?? "N/A"}</p>
-                            <p><strong>Consumption:</strong> {r.cubic_used ?? "0"} m³</p>
-                            <p><strong>Total Bill:</strong> ₱{r.total_bill ?? "0"}</p>
-                            <p><strong>Payment 1:</strong> ₱{r.payment_1 ?? "0"}</p>
-                            <p><strong>Payment 2:</strong> ₱{r.payment_2 ?? "0"}</p>
-                            <p><strong>Remaining Balance:</strong> ₱{r.remaining_balance ?? "0"}</p>
-                            <p><strong>Reference Code:</strong> {r.reference_code || "N/A"}</p>
-
-                            {status !== "Paid" && (
-                              <div className="flex flex-col gap-2 mt-2">
-                                {/* Inline note for prev */}
-                                {isPrev && Number(r.remaining_balance || 0) > 0 && (
-                                  <p className="text-sm text-blue-700">Previous month requires FULL payment (but you may type an amount; submission will validate).</p>
-                                )}
-
-                                <div className="flex gap-2">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    className="p-2 border rounded w-1/2 focus:ring-1 focus:ring-blue-500"
-                                    placeholder="Enter payment amount"
-                                    // value={inputVal}
-                                    onChange={(e) => setAdminPayments((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                                    disabled={disablePaymentDueToPrev}
-                                  />
-                                  <button
-                                    className={`bg-green-600 p-2 rounded hover:bg-green-700 text-white transition ${disablePaymentDueToPrev ? "opacity-60 cursor-not-allowed" : ""}`}
-                                    onClick={() => handleSubmitPayment(user.id, r.id)}
-                                    disabled={disablePaymentDueToPrev || (isPrev && !prevAmountMatches)}
-                                  >
-                                    Record Payment
-                                  </button>
+                              {status !== "Paid" && (
+                                <div className="flex flex-col gap-2 mt-2">
+                                  {isPrev && Number(r.remaining_balance || 0) > 0 && (
+                                    <p className="text-sm text-blue-700">Previous month requires FULL payment.</p>
+                                  )}
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      className="p-2 border rounded w-1/2 focus:ring-1 focus:ring-blue-500"
+                                      placeholder="Enter payment amount"
+                                      onChange={(e) => setAdminPayments((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                                      disabled={disablePaymentDueToPrev}
+                                      // value={inputVal}
+                                    />
+                                    <button
+                                      className={`bg-green-600 p-2 rounded hover:bg-green-700 text-white transition ${disablePaymentDueToPrev ? "opacity-60 cursor-not-allowed" : ""}`}
+                                      onClick={() => handleSubmitPayment(user.id, r.id)}
+                                      disabled={disablePaymentDueToPrev}
+                                    >
+                                      Record Payment
+                                    </button>
+                                  </div>
                                 </div>
-
-                                {/* Inline validation */}
-                                {isPrev && showPrevInlineWarning && (
-                                  <p className="text-xs text-red-600">
-                                    ⚠️ For previous month, entered amount must equal the full remaining balance: ₱{Number(r.remaining_balance || 0).toFixed(2)}.
-                                  </p>
-                                )}
-
-                                {disablePaymentDueToPrev && (
-                                  <p className="text-xs text-red-600">
-                                    Cannot record current month payment. Previous month (
-                                    {new Date(prevRecord?.billing_date || r.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })})
-                                    has unpaid balance of ₱{prevRecord?.remaining_balance ?? (prevRecord ? prevRecord.remaining_balance : "N/A")}.
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
+                              )}
+                            </div>
+                          );
+                        })
                     ) : (
                       <p>No payment records found (for current or previous month).</p>
                     )}
                   </div>
 
+                  {/* Right side: Payment Proofs */}
                   <div className="col-span-1 p-3 bg-white rounded-lg shadow flex flex-col items-center overflow-auto">
-                    <h2 className="text-lg font-semibold mb-2 text-center">Payment Proofs (per month)</h2>
-
+                    <h2 className="text-lg font-semibold mb-2 text-center">Payment Proof</h2>
                     {records.length > 0 ? (
-                      records.map((rec) => (
-                        <div key={rec.id} className="mb-4 text-center w-full">
-                          <p className="text-sm font-medium mb-1">
-                            {new Date(rec.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                          </p>
-                          {rec.proof_url ? (
-                            <img src={`http://localhost:5000${rec.proof_url}`} alt={`Proof ${rec.id}`} className="w-56 h-56 rounded-lg shadow object-contain mx-auto" />
-                          ) : (
-                            <p className="text-gray-500 italic text-sm">No proof uploaded for this month.</p>
-                          )}
-                        </div>
-                      ))
+                      records
+                        .filter((r, index) => {
+                          // Show proof images even for fully paid previous month?
+                          const isPrev = index === 1;
+                          const status = getStatus(r);
+                          if (isPrev && status === "Paid") return false;
+                          return true;
+                        })
+                        .map((rec) => (
+                          <div key={rec.id} className="mb-4 text-center w-full">
+                            <p className="text-sm font-medium mb-1">
+                              {new Date(rec.billing_date).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                            </p>
+                            {rec.proof_url ? (
+                              <img src={`http://localhost:5000${rec.proof_url}`} alt={`Proof ${rec.id}`} className="w-56 h-56 rounded-lg shadow object-contain mx-auto" />
+                            ) : (
+                              <p className="text-gray-500 italic text-sm">No proof uploaded for this month.</p>
+                            )}
+                          </div>
+                        ))
                     ) : (
                       <p className="text-gray-500 italic">No proofs available.</p>
                     )}
                   </div>
                 </div>
               )}
+
             </div>
           );
         })
