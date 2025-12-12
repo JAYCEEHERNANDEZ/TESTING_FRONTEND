@@ -51,18 +51,18 @@ const Profiles = () => {
     <SideBarHeader>
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white p-6 rounded-xl shadow-md border">
+        <div className="bg-white p-6 rounded-xl shadow-md">
           <p className="text-blue-600 text-3xl font-bold">{totalUsers}</p>
           <p className="text-gray-600 mt-1 text-sm">Total Users</p>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-md border">
+        <div className="bg-white p-6 rounded-xl shadow-md">
           <p className="text-green-600 text-3xl font-bold">{activeUsers}</p>
           <p className="text-gray-600 mt-1 text-sm">Active Users</p>
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white p-6 rounded-xl shadow-md border">
+      <div className="bg-white p-6 rounded-xl shadow-md">
         <h3 className="text-lg font-semibold mb-4 text-blue-700">User List</h3>
         <table className="w-full border-collapse text-gray-800">
           <thead>

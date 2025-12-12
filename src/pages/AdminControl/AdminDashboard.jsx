@@ -109,7 +109,7 @@ const AdminDashboard = () => {
           { label: "Total Income", value: `₱ ${totalIncome.toLocaleString()}`, color: "text-yellow-600" },
           { label: "Cubic Meters Used", value: totalCubicUsed, color: "text-purple-600" },
         ].map((kpi, idx) => (
-          <div key={idx} className="bg-white p-6 rounded-xl shadow-md flex flex-col justify-between">
+          <div key={idx} className="bg-black/5 p-6 rounded-xl shadow-md flex flex-col justify-between">
             <p className={`text-3xl font-bold ${kpi.color}`}>{kpi.value}</p>
             <p className="text-gray-600 mt-1 text-sm">{kpi.label}</p>
             {(filterMonth || filterYear) && <span className="text-gray-400 text-xs mt-1">{filterLabel}</span>}
@@ -119,7 +119,7 @@ const AdminDashboard = () => {
 
       {/* Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        <div className="bg-white p-6 rounded-xl shadow-md">
+        <div className=" p-6 rounded-xl shadow-md bg-black/5">
           <h2 className="text-lg font-semibold mb-4">Cubic Meters Used</h2>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
@@ -132,7 +132,7 @@ const AdminDashboard = () => {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-md">
+        <div className="p-6 rounded-xl shadow-md bg-black/5">
           <h2 className="text-lg font-semibold mb-4">Total Income (₱)</h2>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
