@@ -70,8 +70,8 @@ const Profiles = () => {
               <th className="p-3 text-left">Name</th>
               <th className="p-3 text-left">Username</th>
               <th className="p-3 text-left">Status</th>
-              <th className="p-3 text-left">Created At</th>
-              <th className="p-3 text-left">Action</th>
+              <th className="p-3 text-left">Added at</th>
+              <th className="p-3 text-left">Change password</th>
             </tr>
           </thead>
           <tbody>
