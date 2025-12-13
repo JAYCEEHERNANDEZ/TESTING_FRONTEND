@@ -9,6 +9,8 @@ import NotificationCenter from "./pages/AdminControl/NotificationCenter.jsx";
 import Profiles from "./pages/AdminControl/Profiles.jsx";
 import ManageCustomers from "./pages/AdminControl/ManageCustomers.jsx";
 
+import ManageAllUnpaidRecords from "./pages/AdminControl/ManageAllUnpaidRecords.jsx";
+
 import ResidentLogin from "./pages/ResidentLogin.jsx";
 import ResidentDashboard from "./pages/ResidentControl/ResidentDashboard.jsx";
 import Payment from "./pages/ResidentControl/ResidentPaymentDashboard.jsx";
@@ -33,6 +35,8 @@ export default function App() {
         <Route path="/notification-center" element={<NotificationCenter />} />
         <Route path="/manage-customers" element={<ManageCustomers />} />
         <Route path="/admin-profiles" element={<Profiles />} />
+
+        <Route path="/unpaid-bills" element={<ManageAllUnpaidRecords />} />
 
         <Route path="/resident-login" element={<ResidentLogin />} />
         <Route path="/resident-dashboard" element={<ResidentDashboard />} />
