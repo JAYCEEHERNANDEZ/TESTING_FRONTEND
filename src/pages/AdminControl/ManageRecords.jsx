@@ -38,6 +38,20 @@ const ManageRecords = () => {
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
+  const isSameMonth = (date, month, year) => {
+  const d = new Date(date);
+  return d.getMonth() === month && d.getFullYear() === year;
+};
+
+const isCurrentMonth = (date) =>
+  isSameMonth(date, currentMonth, currentYear);
+
+const isPreviousMonth = (date) => {
+  const prev = new Date(currentYear, currentMonth - 1, 1);
+  return isSameMonth(date, prev.getMonth(), prev.getFullYear());
+};
+
+
   const getStatus = (record) => {
     if (!record) return "Unpaid";
     const remaining = Number(record.remaining_balance || 0);
@@ -151,106 +165,151 @@ const ManageRecords = () => {
   const handleSubmitPayment = async (userId, paymentId) => {
   try {
     const records = recordsByUser[userId] || [];
-    const latest = records[0] || null; // current month
-    const prev = records[1] || null; // previous month if present
 
-    const targetRecord = records.find((r) => String(r.id) === String(paymentId));
-    if (!targetRecord) {
+    // Identify records by month
+    const currentRecord =
+      records.find(r => isCurrentMonth(r.billing_date)) || null;
+
+    const previousRecord =
+      records.find(r => isPreviousMonth(r.billing_date)) || null;
+
+    const record =
+      records.find(r => String(r.id) === String(paymentId)) || null;
+
+    if (!record) {
       showStickyMessage("error", "Record not found.");
       return;
     }
 
-    const enteredValueRaw = adminPayments[paymentId];
-    const enteredValue = enteredValueRaw === undefined || enteredValueRaw === "" ? null : Number(enteredValueRaw);
+    const enteredRaw = adminPayments[paymentId];
+    const entered = Number(enteredRaw);
 
-    const isCurrent = latest && String(targetRecord.id) === String(latest.id);
-    const isPrev = prev && String(targetRecord.id) === String(prev.id);
+    if (!enteredRaw || entered <= 0) {
+      showStickyMessage("error", "Enter a valid payment amount.");
+      return;
+    }
 
-    // === Previous month constraint ===
-    if (isPrev && Number(targetRecord.remaining_balance || 0) > 0) {
-      if (enteredValue === null) {
-        showStickyMessage("error", "Enter payment amount.");
-        return;
-      }
-      const required = Number(targetRecord.remaining_balance || 0);
-      if (!isAmountEqual(enteredValue, required)) {
-        showStickyMessage("error", `Previous month requires full payment of ₱${required.toFixed(2)}.`);
+    /* ==================================================
+       PREVIOUS MONTH → FULL PAYMENT ONLY
+    ================================================== */
+    if (isPreviousMonth(record.billing_date)) {
+      const remaining = Number(record.remaining_balance || 0);
+
+      if (!isAmountEqual(entered, remaining)) {
+        showStickyMessage(
+          "error",
+          `Previous month requires FULL payment of ₱${remaining.toFixed(2)}.`
+        );
         return;
       }
     }
 
-    // === Current month constraint ===
-    if (isCurrent) {
-      const prevRem = prev ? Number(prev.remaining_balance || 0) : 0;
-      if (prevRem > 0) {
+    /* ==================================================
+       CURRENT MONTH RULES
+    ================================================== */
+    if (isCurrentMonth(record.billing_date)) {
+      // Block if previous month unpaid
+      if (previousRecord && Number(previousRecord.remaining_balance) > 0) {
         showStickyMessage(
           "error",
-          `Cannot record current month. Previous month (${new Date(prev.billing_date).toLocaleDateString(
-            "en-US",
-            { month: "long", year: "numeric" }
-          )}) has unpaid balance ₱${prevRem}. Record that first.`
+          "You must fully pay the previous month before paying the current month."
         );
         return;
       }
 
-      if (targetRecord.payment_1 > 0 && enteredValue <= 0) {
-        showStickyMessage("error", "Enter a valid amount for payment.");
-        return;
-      }
+      const remaining = Number(record.remaining_balance || 0);
+      const isPayment2 = Number(record.payment_1 || 0) > 0;
 
-      // enforce payment_2 equals remaining_balance if payment_2
-      if (enteredValueRaw && targetRecord.payment_1 > 0) {
-        const remaining = Number(targetRecord.remaining_balance || 0);
-        if (!isAmountEqual(enteredValue, remaining)) {
-          showStickyMessage("error", `Payment 2 must equal remaining balance ₱${remaining.toFixed(2)}.`);
+      if (isPayment2) {
+        // Payment 2 → must match remaining balance
+        if (!isAmountEqual(entered, remaining)) {
+          showStickyMessage(
+            "error",
+            `Final payment must be exactly ₱${remaining.toFixed(2)}.`
+          );
+          return;
+        }
+      } else {
+        // Payment 1 → partial allowed but cannot exceed remaining
+        if (entered > remaining) {
+          showStickyMessage(
+            "error",
+            "Payment exceeds remaining balance."
+          );
           return;
         }
       }
     }
 
-    // Proceed to record payment
-    await adminRecordPayment(paymentId, Number(enteredValue));
+    /* ==================================================
+       RECORD PAYMENT
+    ================================================== */
+    await adminRecordPayment(paymentId, entered);
     showStickyMessage("success", "Payment recorded successfully.");
 
-    // Refresh user records and notifications
-    await loadUserRecords(userId);
-
-    // Mark related notifications as read
+    /* ==================================================
+       MARK ADMIN NOTIFICATIONS AS READ
+    ================================================== */
     const relatedNotifications = notifications.filter(
-      (n) => n.user_id === userId && !n.is_read && n.title.includes("Payment")
+      n =>
+        n.user_id === userId &&
+        !n.is_read &&
+        n.title.includes("Payment")
     );
+
     for (const notif of relatedNotifications) {
       try {
         await markAdminNotificationRead(notif.id);
       } catch (err) {
-        console.error("markAdminNotificationRead:", err);
+        console.error("markAdminNotificationRead error:", err);
       }
     }
-    setNotifications((prev) => prev.filter((n) => !(n.user_id === userId && n.title.includes("Payment"))));
 
-    // Generate receipt
-    // Generate receipt with payment type
-    try {
-      const enteredAmount = Number(adminPayments[paymentId]);
-      const records = recordsByUser[userId] || [];
-      const record = records.find(r => String(r.id) === String(paymentId));
-      const paymentType = record.payment_1 === 0 ? "Payment 1" : "Payment 2"; // or some logic based on remaining_balance
-      await handleGenerateReceipt(userId, paymentId, enteredAmount, paymentType);
-    } catch (err) {
-      console.error("handleGenerateReceipt error:", err);
-    }
+    // Optional: update UI instantly
+    setNotifications(prev =>
+      prev.filter(
+        n =>
+          !(
+            n.user_id === userId &&
+            n.title.includes("Payment")
+          )
+      )
+    );
 
+    /* ==================================================
+       GENERATE RECEIPT
+    ================================================== */
+    const paymentType = isPreviousMonth(record.billing_date)
+      ? "Full Payment (Previous Month)"
+      : Number(record.payment_1 || 0) > 0
+      ? "Payment 2"
+      : "Payment 1";
 
-    setAdminPayments((prev) => {
+    await handleGenerateReceipt(
+      userId,
+      paymentId,
+      entered,
+      paymentType
+    );
+
+    /* ==================================================
+       REFRESH DATA
+    ================================================== */
+    await loadUserRecords(userId);
+
+    setAdminPayments(prev => {
       const copy = { ...prev };
       delete copy[paymentId];
       return copy;
     });
+
   } catch (err) {
     console.error("handleSubmitPayment error:", err);
     showStickyMessage("error", "Failed to record payment.");
   }
 };
+
+
 
 
   const handleGenerateReceipt = async (userId, consumptionId, amountPaid, paymentType) => {
@@ -372,8 +431,11 @@ const ManageRecords = () => {
         filteredUsers.map((user) => {
           const hasPendingPayment = notifications.some((n) => n.user_id === user.id && !n.is_read && n.title.includes("Payment"));
           const records = recordsByUser[user.id] || [];
-          const latestRecord = records[0] || null;
-          const prevRecord = records[1] || null;
+          const latestRecord =
+          records.find(r => isCurrentMonth(r.billing_date)) || null;
+          const prevRecord =
+            records.find(r => isPreviousMonth(r.billing_date)) || null;
+
           const paymentStatus = getStatus(latestRecord);
           const prevUnpaidExists = prevRecord && Number(prevRecord.remaining_balance || 0) > 0;
 
@@ -417,8 +479,9 @@ const ManageRecords = () => {
                         })
                         .map((r, index) => {
                           const status = getStatus(r);
-                          const isCurrent = index === 0;
-                          const isPrev = index === 1;
+                          const isCurrent = isCurrentMonth(r.billing_date);
+const isPrev = isPreviousMonth(r.billing_date);
+
                           const disablePaymentDueToPrev = isCurrent && records[1] && getStatus(records[1]) !== "Paid";
 
                           const inputVal =
@@ -482,13 +545,13 @@ const ManageRecords = () => {
                     <h2 className="text-lg font-semibold mb-2 text-center">Payment Proof</h2>
                     {records.length > 0 ? (
                       records
-                        .filter((r, index) => {
-                          // Show proof images even for fully paid previous month?
-                          const isPrev = index === 1;
-                          const status = getStatus(r);
-                          if (isPrev && status === "Paid") return false;
-                          return true;
-                        })
+                        .filter((r) => {
+  if (isPreviousMonth(r.billing_date) && getStatus(r) === "Paid") {
+    return false;
+  }
+  return true;
+})
+
                         .map((rec) => (
                           <div key={rec.id} className="mb-4 text-center w-full">
                             <p className="text-sm font-medium mb-1">
