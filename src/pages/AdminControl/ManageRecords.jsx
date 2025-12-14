@@ -446,14 +446,14 @@ const ManageRecords = () => {
           return (
             <div
               key={user.id}
-              className={`bg-white p-4 mb-2 rounded-lg shadow hover:shadow-lg transition ${
+              className={`bg-white p-4 mb-2 rounded-lg shadow-black hover:shadow-lg hover:bg-blue-50 transition ${
                 expandedUserId === user.id ? "border-2 border-blue-400" : ""
               } ${hasPendingPayment ? "border-2 border-yellow-400" : ""}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <button
-                    className="text-lg font-semibold text-blue-600 hover:text-blue-500"
+                    className="text-lg font-semibold text-blue-600 hover:text-black"
                     onClick={() => expandUser(user.id)}
                   >
                     {user.name}
@@ -477,7 +477,7 @@ const ManageRecords = () => {
                     onClick={() => openNoticeModal(user.id)}
                     className="ml-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white px-4 py-1 rounded shadow hover:shadow-lg flex items-center gap-2"
                   >
-                    <FaPaperPlane /> Send Notice
+                    <FaPaperPlane /> Send Message
                   </button>
                 </div>
               </div>
