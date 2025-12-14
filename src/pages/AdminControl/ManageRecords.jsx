@@ -12,7 +12,7 @@ import {
 } from "../../api/api.js";
 import usePageTitle from "../usePageTitle";
 
-const EPSILON = 0.01; // tolerance for float comparisons
+const EPSILON = 0.01;
 
 const ManageRecords = () => {
   usePageTitle("User Payment Records");
@@ -192,9 +192,7 @@ const ManageRecords = () => {
         return;
       }
 
-      /* ==================================================
-       PREVIOUS MONTH → FULL PAYMENT ONLY
-    ================================================== */
+   //    PREVIOUS MONTH → FULL PAYMENT ONLY
       if (isPreviousMonth(record.billing_date)) {
         const remaining = Number(record.remaining_balance || 0);
 
@@ -207,9 +205,8 @@ const ManageRecords = () => {
         }
       }
 
-      /* ==================================================
-       CURRENT MONTH RULES
-    ================================================== */
+   //    CURRENT MONTH RULES
+
       if (isCurrentMonth(record.billing_date)) {
         // Block if previous month unpaid
         if (previousRecord && Number(previousRecord.remaining_balance) > 0) {
@@ -241,15 +238,14 @@ const ManageRecords = () => {
         }
       }
 
-      /* ==================================================
-       RECORD PAYMENT
-    ================================================== */
+ 
+     //  RECORD PAYMENT
+
       await adminRecordPayment(paymentId, entered);
       showStickyMessage("success", "Payment recorded successfully.");
 
-      /* ==================================================
-       MARK ADMIN NOTIFICATIONS AS READ
-    ================================================== */
+   //    MARK ADMIN NOTIFICATIONS AS READ
+
       const relatedNotifications = notifications.filter(
         (n) => n.user_id === userId && !n.is_read && n.title.includes("Payment")
       );
@@ -269,9 +265,8 @@ const ManageRecords = () => {
         )
       );
 
-      /* ==================================================
-       GENERATE RECEIPT
-    ================================================== */
+    //   GENERATE RECEIPT
+
       const paymentType = isPreviousMonth(record.billing_date)
         ? "Full Payment (Previous Month)"
         : Number(record.payment_1 || 0) > 0
@@ -280,9 +275,8 @@ const ManageRecords = () => {
 
       await handleGenerateReceipt(userId, paymentId, entered, paymentType);
 
-      /* ==================================================
-       REFRESH DATA
-    ================================================== */
+   //    REFRESH DATA
+
       await loadUserRecords(userId);
 
       setAdminPayments((prev) => {
