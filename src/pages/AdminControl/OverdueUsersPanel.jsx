@@ -14,7 +14,7 @@ const OverdueUsersPanel = () => {
     try {
       const res = await fetchOverdueUsers();
       if (res.data.success) {
-        // Add local noticeSent flag
+        // Map backend notice_sent to frontend noticeSent
         const usersWithNoticeFlag = res.data.users.map(u => ({
           ...u,
           noticeSent: u.notice_sent || false,
@@ -28,17 +28,21 @@ const OverdueUsersPanel = () => {
 
   // Send notice for a single user
   const handleSendOverdueNotice = async (userIndex) => {
+    const user = overdueUsers[userIndex];
+    if (user.noticeSent) return; // prevent sending again
+
     setSendingNotice(true);
     try {
-      const user = overdueUsers[userIndex];
-      await sendDeactNotice({ 
-        user_id: user.user_id, 
-        billing_date: user.billing_date // <-- important
+      const res = await sendDeactNotice({
+        user_id: user.user_id,
+        billing_date: user.billing_date,
       });
 
-      const updated = [...overdueUsers];
-      updated[userIndex].noticeSent = true;
-      setOverdueUsers(updated);
+      if (res.data.success) {
+        const updated = [...overdueUsers];
+        updated[userIndex].noticeSent = true;
+        setOverdueUsers(updated);
+      }
     } catch (err) {
       console.error("Error sending notice:", err);
     } finally {
@@ -51,15 +55,20 @@ const OverdueUsersPanel = () => {
     setSendingNotice(true);
     try {
       const updated = [...overdueUsers];
+
       for (let i = 0; i < overdueUsers.length; i++) {
-        if (!overdueUsers[i].noticeSent) {
-          await sendDeactNotice({
-            user_id: overdueUsers[i].user_id,
-            billing_date: overdueUsers[i].billing_date, // <-- important
+        if (!updated[i].noticeSent) {
+          const res = await sendDeactNotice({
+            user_id: updated[i].user_id,
+            billing_date: updated[i].billing_date,
           });
-          updated[i].noticeSent = true;
+
+          if (res.data.success) {
+            updated[i].noticeSent = true;
+          }
         }
       }
+
       setOverdueUsers(updated);
     } catch (err) {
       console.error("Error sending all notices:", err);
@@ -84,7 +93,9 @@ const OverdueUsersPanel = () => {
           )}
         </div>
 
-        {overdueUsers.length === 0 && <p className="text-gray-500">No overdue users</p>}
+        {overdueUsers.length === 0 && (
+          <p className="text-gray-500">No overdue users</p>
+        )}
 
         {overdueUsers.map((u, index) => (
           <div
@@ -106,10 +117,16 @@ const OverdueUsersPanel = () => {
               </button>
             </div>
             <p className="text-sm text-gray-700">
-              Billing Date: {u.billing_date ? new Date(u.billing_date).toLocaleDateString() : "-"}
+              Billing Date:{" "}
+              {u.billing_date
+                ? new Date(u.billing_date).toLocaleDateString()
+                : "-"}
             </p>
             <p className="text-sm text-gray-700">
-              Due Date: {u.due_date ? new Date(u.due_date).toLocaleDateString() : "-"}
+              Due Date:{" "}
+              {u.due_date
+                ? new Date(u.due_date).toLocaleDateString()
+                : "-"}
             </p>
             <p className="text-sm text-red-600 font-semibold">
               Remaining: ₱{u.remaining_balance || 0}
